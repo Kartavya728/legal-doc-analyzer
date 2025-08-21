@@ -69,7 +69,7 @@ export default function Display() {
 
   return (
     <div className="w-full max-w-3xl flex flex-col items-center">
-      <h1 className="text-3xl font-bold mb-6 text-center">📄 Legal Doc Analyzer</h1>
+      <h1 className="text-3xl font-bold mb-6 text-center">📄 Legal Doc Analyzer(PSMBDSM)</h1>
       <form onSubmit={handleUpload} className="w-full flex flex-col items-center gap-4 p-4 border-2 border-dashed rounded-lg">
         <input
           type="file"
