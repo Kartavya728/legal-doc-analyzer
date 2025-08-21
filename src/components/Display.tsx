@@ -1,3 +1,5 @@
+// ./src/components/Display.tsx
+
 "use client";
 import { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import Image from "next/image";
@@ -8,6 +10,7 @@ export default function Display() {
   const [summary, setSummary] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
 
+  // Clean up the object URL to avoid memory leaks
   useEffect(() => {
     return () => {
       if (previewUrl) {
@@ -19,7 +22,7 @@ export default function Display() {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] || null;
     setFile(selectedFile);
-    setSummary(""); 
+    setSummary(""); // Reset summary when a new file is selected
 
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
@@ -60,8 +63,13 @@ export default function Display() {
         setSummary(data.summary || "No summary found");
       }
 
-    } catch (error: any) {
-      setSummary("❌ Error: " + error.message);
+    } catch (error: unknown) { // <-- FIX: Use 'unknown' instead of 'any'
+        // FIX: Check the type of the error
+        if (error instanceof Error) {
+            setSummary("❌ Error: " + error.message);
+        } else {
+            setSummary("❌ An unknown error occurred");
+        }
     } finally {
       setLoading(false);
     }
@@ -69,7 +77,7 @@ export default function Display() {
 
   return (
     <div className="w-full max-w-3xl flex flex-col items-center">
-      <h1 className="text-3xl font-bold mb-6 text-center">📄 Legal Doc Analyzer(PSMBDSM)</h1>
+      <h1 className="text-3xl font-bold mb-6 text-center">📄 Legal Doc Analyzer</h1>
       <form onSubmit={handleUpload} className="w-full flex flex-col items-center gap-4 p-4 border-2 border-dashed rounded-lg">
         <input
           type="file"
@@ -88,7 +96,6 @@ export default function Display() {
 
       {/* Container for Image Preview and Summary */}
       <div className="mt-8 w-full p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 shadow-inner">
-        {/* Image Preview Section */}
         {previewUrl && (
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-2 text-center">📷 Image Preview</h2>
@@ -103,14 +110,12 @@ export default function Display() {
           </div>
         )}
 
-        {/* Loading Spinner */}
         {loading && (
           <div className="flex justify-center items-center my-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
           </div>
         )}
 
-        {/* Summary Section */}
         {summary && (
           <div>
             <h2 className="text-xl font-semibold mb-2 text-center">📝 Summary</h2>
