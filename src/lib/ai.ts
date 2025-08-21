@@ -1,72 +1,37 @@
-import { HfInference } from '@huggingface/inference';
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
-// Environment Variable Check (remains the same)
-const hfToken = process.env.HUGGINGFACE_ACCESS_TOKEN;
 const geminiApiKey = process.env.GEMINI_API_KEY;
-
-if (!hfToken) {
-  throw new Error("FATAL: HUGGINGFACE_ACCESS_TOKEN is not defined in your .env.local file.");
-}
 if (!geminiApiKey) {
   throw new Error("FATAL: GEMINI_API_KEY is not defined in your .env.local file.");
 }
 
-// Initialize clients (remains the same)
-const hf = new HfInference(hfToken);
 const geminiModel = new ChatGoogleGenerativeAI({
   apiKey: geminiApiKey,
-  model: "gemini-pro",
-  temperature: 0.3,
+  model: "gemini-1.5-pro",
+  temperature: 0.4,
 });
 
-// The data structure our API will return
-export interface TestResult {
-  extractedText: string;
-  hfSummary: string;
-  geminiSummary: string;
-}
-
 /**
- * Extracts text from an image buffer using a Hugging Face OCR model.
+ * Takes raw text from a legal document and generates a structured
+ * analysis formatted in Markdown.
+ * @param text The raw text of the document.
+ * @returns A promise that resolves to a single Markdown string.
  */
-export async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
-  const model = "microsoft/trocr-base-handwritten";
+export async function generateMarkdownAnalysis(text: string): Promise<string> {
+  const prompt = `
+    You are an expert legal analyst AI. Your task is to analyze the following document text and generate a clear, concise, and well-structured report formatted exclusively in Markdown.
 
-  // --- FIX #1: Use the underlying .buffer property for type compatibility ---
-  const imageBlob = new Blob([imageBuffer.buffer]);
+    The report must contain the following sections:
+    1.  A "Document Summary" section with a level 2 heading (##).
+    2.  A "Key Clauses & Potential Risks" section with a level 2 heading (##). Under this heading, use a bulleted list (-) to identify at least 3-5 important clauses, terms, or risks. For each item, bold the key term (e.g., **Indemnification**) and then provide a simple, one-sentence explanation.
+    3.  A "Recommendations" section with a level 2 heading (##). Provide a short, actionable recommendation for the user (e.g., "Consult a lawyer before signing," "Pay close attention to the termination clause," etc.).
 
-  const result = await hf.imageToText({
-    model,
-    data: imageBlob,
-  });
+    Here is the document text:
+    ---
+    ${text.substring(0, 8000)} 
+    ---
+  `;
 
-  // --- FIX #2: Handle potential 'undefined' result with a fallback ---
-  return result.generated_text ?? '';
-}
-
-/**
- * Gets a one-line summary from Hugging Face.
- */
-export async function getOneLineSummaryHF(text: string): Promise<string> {
-  const model = "facebook/bart-large-cnn";
-  const result = await hf.summarization({
-    model,
-    inputs: text.substring(0, 1024),
-    parameters: { max_length: 60 }
-  });
-
-  // --- FIX #2: Handle potential 'undefined' result with a fallback ---
-  return result.summary_text ?? '';
-}
-
-/**
- * Gets a one-line summary from Google Gemini.
- */
-export async function getOneLineSummaryGemini(text: string): Promise<string> {
-  const prompt = `Provide a single, concise one-line summary of the following text: \n\n"${text.substring(0, 4000)}"`;
   const result = await geminiModel.invoke(prompt);
-  
-  // --- FIX #2: Handle potential 'undefined' result with a fallback ---
-  return (result.content as string) ?? '';
+  return (result.content as string) ?? "Analysis could not be generated.";
 }

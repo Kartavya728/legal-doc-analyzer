@@ -1,9 +1,13 @@
 // src/lib/js_processing.ts
 
 import { HfInference } from '@huggingface/inference';
-import * as pdfjs from 'pdfjs-dist';
+// --- FIX #1: Import the 'legacy' build of pdf.js as instructed by the warning ---
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.js';
 import { Canvas, createCanvas, CanvasRenderingContext2D } from 'canvas';
-pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/build/pdf.worker.js');
+
+// --- FIX #2: Update the worker source to match the legacy build ---
+// This ensures the main library and its worker are the same version.
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.js`;
 
 const hfToken = process.env.HUGGINGFACE_ACCESS_TOKEN;
 if (!hfToken) {
@@ -18,12 +22,10 @@ class NodeCanvasFactory {
     const context = canvas.getContext("2d");
     return { canvas, context };
   }
-
   reset(canvasAndContext: { canvas: Canvas; context: CanvasRenderingContext2D }, width: number, height: number): void {
     canvasAndContext.canvas.width = width;
     canvasAndContext.canvas.height = height;
   }
-
   destroy(canvasAndContext: { canvas: Canvas; context: CanvasRenderingContext2D }): void {
     // @ts-ignore
     canvasAndContext.canvas = null;
@@ -52,16 +54,11 @@ export async function processPdf(fileBuffer: Buffer): Promise<string> {
         const canvasFactory = new NodeCanvasFactory();
         const canvasAndContext = canvasFactory.create(viewport.width, viewport.height);
         
-        // --- THE DEFINITIVE FIX ---
-        // The TypeScript error is explicit: the RenderParameters object requires a 'canvas' property.
-        // We provide both the context and the canvas to satisfy the strict type definition.
-        // We use 'as any' to bridge the type difference between Node's canvas and the browser-based types.
+        // This render call is correct.
         await page.render({
             canvasContext: canvasAndContext.context as any,
-            canvas: canvasAndContext.canvas as any, // This is the required property we were missing
             viewport,
         }).promise;
-        // --- END OF FIX ---
 
         const imageBuffer = (canvasAndContext.canvas as Canvas).toBuffer('image/png');
         const pageText = await extractTextFromImage(imageBuffer);

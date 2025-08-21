@@ -5,12 +5,22 @@ import toast from "react-hot-toast";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// --- FIX #3: Define types for our API responses for type safety ---
+type ApiSuccessResponse = {
+  analysis: string;
+};
+
+type ApiErrorResponse = {
+  detail: string;
+};
+
 export default function UploadForm() {
+  // --- FIX #1: Explicitly type all state variables ---
   const [file, setFile] = useState<File | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>("");
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const handleFileSelect = (selectedFile: File) => {
     if (selectedFile.type !== "application/pdf") {
@@ -21,6 +31,7 @@ export default function UploadForm() {
     setFile(selectedFile);
   };
 
+  // --- FIX #2: Add correct TypeScript types for React Drag Events ---
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -55,22 +66,40 @@ export default function UploadForm() {
     formData.append("file", file);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/analyze`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || ''}/api/analyze`, {
         method: "POST",
         body: formData,
       });
 
-      const data = await response.json();
+      // Use our defined types to handle the response safely
+      const data: ApiSuccessResponse | ApiErrorResponse = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || "An unknown error occurred.");
+        // Type guard to ensure we're accessing the 'detail' property safely
+        if ('detail' in data) {
+          throw new Error(data.detail);
+        }
+        throw new Error("An unknown error occurred.");
+      }
+      
+      // Type guard for the success case
+      if ('analysis' in data) {
+        setAnalysisResult(data.analysis);
+        toast.success("Analysis complete!", { id: toastId });
+      } else {
+        throw new Error("Invalid success response from server.");
       }
 
-      setAnalysisResult(data.analysis);
-      toast.success("Analysis complete!", { id: toastId });
-    } catch (err: any) {
-      setError(err.message);
-      toast.error(err.message, { id: toastId });
+    } catch (err) {
+      // --- FIX #4: More robust error handling ---
+      if (err instanceof Error) {
+        setError(err.message);
+        toast.error(err.message, { id: toastId });
+      } else {
+        const errorMessage = "An unexpected error occurred.";
+        setError(errorMessage);
+        toast.error(errorMessage, { id: toastId });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -91,7 +120,10 @@ export default function UploadForm() {
         <input
           type="file"
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
+          // --- FIX #2: Type the change event for the file input ---
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+            e.target.files && handleFileSelect(e.target.files[0])
+          }
           accept=".pdf"
         />
         <p className="text-gray-400">Drag & drop a PDF here, or click to select</p>
@@ -116,7 +148,6 @@ export default function UploadForm() {
         <div className="mt-8 p-6 bg-gray-900/50 border border-gray-700 rounded-lg">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            className="prose prose-invert prose-headings:text-purple-300 prose-strong:text-pink-400"
           >
             {analysisResult}
           </ReactMarkdown>

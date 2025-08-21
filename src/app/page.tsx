@@ -1,20 +1,61 @@
-import UploadForm from "@/components/UploadForm";
+"use client";
+import { useState } from "react";
 
-export default function HomePage() {
+export default function Home() {
+  const [file, setFile] = useState<File | null>(null);
+  const [summary, setSummary] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file) return;
+
+    setLoading(true);
+    setSummary("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await res.json();
+    setLoading(false);
+
+    if (data.error) {
+      setSummary("❌ Error: " + data.error);
+    } else {
+      setSummary(data.summary || "No summary found");
+    }
+  };
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 md:p-8">
-      <div className="w-full max-w-4xl mx-auto">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
-            Document Analysis Engine
-          </h1>
-          <p className="mt-2 text-lg text-gray-400">
-            Powered by Python, LangGraph, and Next.js
-          </p>
+    <div className="min-h-screen flex flex-col items-center justify-center p-10">
+      <h1 className="text-2xl font-bold mb-5">📄 Legal Doc Analyzer</h1>
+      <form onSubmit={handleUpload} className="flex flex-col items-center gap-4">
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          className="border p-2"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+        >
+          {loading ? "Analyzing..." : "Upload & Analyze"}
+        </button>
+      </form>
+
+      {summary && (
+        <div className="mt-6 p-4 border rounded-lg w-1/2 bg-gray-800">
+          <h2 className="text-lg font-semibold mb-2">📝 Summary</h2>
+          <p>{summary}</p>
         </div>
-        
-        <UploadForm />
-      </div>
-    </main>
+      )}
+    </div>
   );
 }
