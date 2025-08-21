@@ -1,5 +1,3 @@
-// app/components/Display.tsx
-
 "use client";
 import { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import Image from "next/image";
@@ -10,7 +8,6 @@ export default function Display() {
   const [summary, setSummary] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Clean up the object URL to avoid memory leaks
   useEffect(() => {
     return () => {
       if (previewUrl) {
@@ -22,9 +19,8 @@ export default function Display() {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] || null;
     setFile(selectedFile);
-    setSummary(""); // Reset summary when a new file is selected
+    setSummary(""); 
 
-    // Create a URL for the selected file to be used in the <img> tag for preview
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
     }
