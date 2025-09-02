@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { processFile } from "../../../lib/utils/file-processing";  
+import { processFile } from "@/lib/utils/file-processing";
+import { translateText } from "@/lib/utils/translate";
+import { generateSummary } from "@/lib/langgraph/main-langgraph";
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,30 +14,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    // Convert file to buffer
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Ensure uploads dir exists
     const uploadDir = path.join(process.cwd(), "uploads");
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
-    // Save file locally
-    const filePath = path.join(uploadDir, file.name);
+    const safeName = Date.now() + "-" + file.name.replace(/[^\w.-]/g, "_");
+    const filePath = path.join(uploadDir, safeName);
     fs.writeFileSync(filePath, buffer);
 
-    // Process file with Google Vision
-    const result = await processFile(filePath);
+    const ocrResult = await processFile(filePath);
 
-    // Clean up (optional)
+    const translatedText = await translateText(ocrResult.text, "en");
+    const translatedWords = await translateText(ocrResult.words, "en");
+
+    const summary = await generateSummary(translatedText as string);
+
+    const fullResult = {
+      original: ocrResult,
+      translated: {
+        file: ocrResult.file,
+        text: translatedText,
+        words: translatedWords,
+      },
+      summary,
+    };
+
     fs.unlinkSync(filePath);
 
-    console.log("OCR Result:", result); // ✅ Print in terminal
-
-    return NextResponse.json({ result });
+    return NextResponse.json({ result: fullResult });
   } catch (error: any) {
     console.error("Upload error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        error: error.message || "Unknown error",
+        stack: error.stack || null,
+      },
+      { status: 500 }
+    );
   }
 }

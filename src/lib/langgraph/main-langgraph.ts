@@ -1,38 +1,34 @@
-// src/lib/langgraph/main-langgraph.ts
-import { StateGraph } from '@langchain/langgraph';
-import { clauseIdentification } from './clause-identification-agent';
-import { clauseCategorization } from './clause-categorization-agent';
+export async function generateSummary(translatedText: string) {
+  try {
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" +
+        process.env.GOOGLE_GENAI_API_KEY,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: `Summarize this text:\n\n${translatedText}` }],
+            },
+          ],
+        }),
+      }
+    );
 
-export function buildGraph() {
-  const graph = new StateGraph<{
-    text: string | null;
-    clauses: { clause: string; start?: number; end?: number }[] | null;
-    categories: { clause: string; category: string }[] | null;
-  }>({
-    channels: {
-      text: null,
-      clauses: null,
-      categories: null,
-    },
-  });
+    const data = await response.json();
 
-  graph.addNode('identify', async (state) => {
-    const clauses = await clauseIdentification(state.text!);
-    return { ...state, clauses };
-  });
+    if (!response.ok) {
+      console.error("Gemini API Error:", data);
+      throw new Error(data.error?.message || "Failed to generate summary");
+    }
 
-  graph.addNode('categorize', async (state) => {
-    const categories = await clauseCategorization(state.clauses || []);
-    return { ...state, categories };
-  });
-
-  graph.addEdge('identify', 'categorize');
-  graph.setEntryPoint('identify');
-
-  return graph.compile();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  } catch (err: any) {
+    console.error("Gemini Summary Error:", err);
+    throw new Error(err.message || "Failed to generate summary");
+  }
 }
-export async function runLangGraph(text: string) {
-  const graph = buildGraph();
-  return await graph.invoke({ text });
-}
-

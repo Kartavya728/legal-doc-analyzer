@@ -11,7 +11,9 @@
   "dependencies": {
     "@google-cloud/storage": "^7.17.0",
     "@google-cloud/translate": "^9.2.0",
+    "@google-cloud/vertexai": "^1.10.0",
     "@google-cloud/vision": "^5.3.3",
+    "@google/generative-ai": "^0.24.1",
     "@headlessui/react": "^2.2.7",
     "@huggingface/inference": "^4.7.1",
     "@langchain/community": "^0.3.53",
