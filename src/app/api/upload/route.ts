@@ -1,14 +1,15 @@
+// src/app/api/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { processFile } from "@/lib/utils/file-processing";
 import { translateText } from "@/lib/utils/translate";
 import { buildVisionPack } from "@/lib/pipeline/vision-pipeline";
-import { runLangGraph } from "@/lib/langgraph/main-langgraph"; // Corrected import name
-import { createClient } from "@supabase/supabase-js";
-import { SupabaseClient } from "@supabase/supabase-js";
+import { runLangGraph } from "@/lib/langgraph/main-langgraph";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { saveWithEmbedding } from "@/lib/utils/embeddings";
 
+// Initialize Supabase client
 const supabase: SupabaseClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -16,24 +17,27 @@ const supabase: SupabaseClient = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    // 🔐 Auth via bearer (same as before)
+    // 🔐 Auth via bearer
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+
     if (userError || !user) {
       return NextResponse.json({ error: "Invalid user" }, { status: 401 });
     }
 
+    // 📂 Get uploaded file
     const formData = await req.formData();
-    const file = formData.get("file") as File;
+    const file = formData.get("file") as File | null;
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    // save temp
+    // Save file locally
     const buffer = Buffer.from(await file.arrayBuffer());
     const uploadDir = path.join(process.cwd(), "uploads");
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -41,40 +45,41 @@ export async function POST(req: NextRequest) {
     const filePath = path.join(uploadDir, safeName);
     fs.writeFileSync(filePath, buffer);
 
-    // OCR using your existing util (kept for parity)
+    // 📝 OCR (Vision API)
     const ocrResult = await processFile(filePath);
 
-    // Build structure + English text pack (engText comes from translateText),
-    // but we already have the OCR text; we can reuse translateText to keep consistent.
+    // 🌍 Translate text
     const engText = await translateText(ocrResult.text, "en");
-    const visionPack = await buildVisionPack(filePath, ocrResult.file || safeName);
-    // Make sure engText from your translator takes precedence (better quality)
-    visionPack.engText = typeof engText === "string" ? engText : Array.isArray(engText) ? engText.join(" ") : String(engText);
 
-    // LangGraph router => final JSON
-    // Corrected input parameter name to engText to match main-langgraph.ts
+    // 🔗 Build vision pack
+    const visionPack = await buildVisionPack(filePath, ocrResult.file || safeName);
+    visionPack.engText = typeof engText === "string"
+      ? engText
+      : Array.isArray(engText)
+        ? engText.join(" ")
+        : String(engText);
+
+    // 🧠 Run LangGraph
     const finalJson = await runLangGraph({
       engText: visionPack.engText,
       structure: visionPack.structure,
-      filename: visionPack.fileName, // Assuming visionPack.fileName is correct
+      filename: visionPack.fileName,
     });
 
-    // Save with pgvector embedding
+    // 💾 Save in DB with embeddings
     const savedDoc = await saveWithEmbedding(supabase, {
       user_id: user.id,
-      file_name: finalJson.filename, // Use finalJson.filename for consistency
+      file_name: finalJson.filename,
       text: finalJson.text,
       structure: finalJson.structure,
       category: finalJson.category,
       json: finalJson,
     });
 
-    // cleanup
+    // 🧹 Cleanup local file
     fs.unlinkSync(filePath);
 
-    // Prepare response payload to match the Display component's expectations
-    // The Display component expects data.summary, data.important_points, and data.clauses
-    // We are pulling these directly from finalJson.
+    // 📦 Response payload
     const responsePayload = {
       original: ocrResult,
       translated: {
@@ -84,12 +89,10 @@ export async function POST(req: NextRequest) {
       },
       structure: finalJson.structure,
       category: finalJson.category,
-      result: finalJson, // Keep the full finalJson for debugging/other uses
+      result: finalJson,
       db_id: savedDoc.id,
-
-      // Directly expose top-level fields needed by the Display component
       summary: finalJson.summary,
-      important_points: finalJson.important_points || [], // Ensure it's an array, even if empty
+      important_points: finalJson.important_points || [],
       clauses: finalJson.clauses,
     };
 
