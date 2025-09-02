@@ -3,7 +3,7 @@
 # Dependencies
 /node_modules
 /python/venv
-
+/google-vision-key.json
 # Next.js build output
 /.next/
 /out/
