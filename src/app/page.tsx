@@ -1,50 +1,40 @@
 "use client";
 
-import { useState } from "react";
-import Display from "../components/Display";
+import { useState, useEffect } from "react";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import HomePage from "../components/home-page";
+import AuthUI from "../components/auth-form";
 
-export default function HomePage() {
-  const [result, setResult] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+export default function Page() {
+  const supabase = createClientComponentClient();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-
-    try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-      setResult(data.result);
-    } catch (error) {
-      console.error("Upload failed:", error);
-      setResult(null);
-    } finally {
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user);
       setLoading(false);
-    }
-  };
+    };
 
-  return (
-    <main className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Legal Document Analyzer</h1>
+    getUser();
 
-      <form onSubmit={handleUpload} className="space-y-4 mb-6">
-        <input type="file" name="file" required />
-        <button
-          type="submit"
-          className="px-4 py-2 bg-blue-600 text-white rounded"
-        >
-          {loading ? "Processing..." : "Upload"}
-        </button>
-      </form>
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
 
-      {/* Always render Display */}
-      <Display data={result} loading={loading} />
-    </main>
-  );
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  if (loading) {
+    return <p className="text-center mt-10">Loading...</p>;
+  }
+
+  return user ? <HomePage user={user} /> : <AuthUI />;
 }
