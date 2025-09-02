@@ -3,7 +3,6 @@ import requests
 import base64
 import json
 
-# Gemini API Key
 GEMINI_API_KEY = "AIzaSyDzI44HYgem4C7elnohwKsy5B3Ri2HO2hw"
 
 def gemini_vision(image_path, prompt="Extract the text from this image and give a short summary."):
@@ -39,4 +38,4 @@ if __name__ == "__main__":
 
     image_path = sys.argv[1]
     result = gemini_vision(image_path)
-    print(json.dumps(result))  # 👈 Output JSON to Node
+    print(json.dumps(result))

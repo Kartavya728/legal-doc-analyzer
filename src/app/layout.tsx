@@ -1,31 +1,24 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-import { Toaster } from 'react-hot-toast'
+import './globals.css';
+import { Inter } from 'next/font/google';
+import { SupabaseProvider } from '../components/supabase-provider'; // Create this
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
-  title: 'AI Document Analyzer',
-  description: 'Upload a PDF to get an AI-powered analysis.',
-}
+export const metadata = {
+  title: 'Legal Doc Analyzer',
+  description: 'Analyze legal documents with AI',
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-gray-900 text-gray-100`}>
-        {children}
-        <Toaster
-          position="bottom-right"
-          toastOptions={{
-            style: { background: '#333', color: '#fff' },
-          }}
-        />
+      <body className={inter.className}>
+        <SupabaseProvider>{children}</SupabaseProvider>
       </body>
     </html>
-  )
+  );
 }
