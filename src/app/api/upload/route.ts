@@ -24,7 +24,10 @@ export async function POST(req: NextRequest) {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
       return NextResponse.json({ error: "Invalid user" }, { status: 401 });
@@ -53,9 +56,10 @@ export async function POST(req: NextRequest) {
 
     // 🔗 Build vision pack
     const visionPack = await buildVisionPack(filePath, ocrResult.file || safeName);
-    visionPack.engText = typeof engText === "string"
-      ? engText
-      : Array.isArray(engText)
+    visionPack.engText =
+      typeof engText === "string"
+        ? engText
+        : Array.isArray(engText)
         ? engText.join(" ")
         : String(engText);
 
@@ -66,14 +70,19 @@ export async function POST(req: NextRequest) {
       filename: visionPack.fileName,
     });
 
-    // 💾 Save in DB with embeddings
+    // ✅ Title for sidebar (fallback = file name)
+    const title = finalJson.title || path.parse(file.name).name;
+
+    // 💾 Save in DB with embeddings (→ history table now)
     const savedDoc = await saveWithEmbedding(supabase, {
+      table: "history", // 👈 target table
       user_id: user.id,
       file_name: finalJson.filename,
       text: finalJson.text,
       structure: finalJson.structure,
       category: finalJson.category,
       json: finalJson,
+      title,
     });
 
     // 🧹 Cleanup local file
@@ -91,6 +100,7 @@ export async function POST(req: NextRequest) {
       category: finalJson.category,
       result: finalJson,
       db_id: savedDoc.id,
+      title,
       summary: finalJson.summary,
       important_points: finalJson.important_points || [],
       clauses: finalJson.clauses,

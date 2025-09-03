@@ -95,134 +95,133 @@ export default function Display({
   }));
 
   return (
-   <div className="flex flex-col min-h-screen bg-transparent text-amber-50">
-  <div className="flex-1 p-6 space-y-6 overflow-y-auto">
-    {/* 📂 Category */}
-    <section>
-      <h2 className="text-xl font-bold mb-2">📂 Category</h2>
-      <p>{category}</p>
-    </section>
+    <div className="flex flex-col min-h-screen bg-transparent text-amber-50">
+      <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+        {/* 📂 Category */}
+        <section className="p-4 bg-black/40 rounded-lg border border-white/20">
+          <h2 className="text-xl font-bold mb-2">📂 Category</h2>
+          <p>{category}</p>
+        </section>
 
-    {/* 📌 Summary */}
-    {summaryText && (
-      <section>
-        <h2 className="text-xl font-bold mb-3">📌 Summary</h2>
-        <p className="leading-relaxed whitespace-pre-line">{summaryText}</p>
-      </section>
-    )}
+        {/* 📌 Summary */}
+        {summaryText && (
+          <section className="p-4 bg-black/40 rounded-lg border border-white/20">
+            <h2 className="text-xl font-bold mb-3">📌 Summary</h2>
+            <p className="leading-relaxed whitespace-pre-line">{summaryText}</p>
+          </section>
+        )}
 
-    {/* ✨ Important Points */}
-    {importantPoints.length > 0 && (
-      <section>
-        <h2 className="text-lg font-semibold mb-3">✨ Important Points</h2>
-        <ul className="list-disc pl-6 space-y-1">
-          {importantPoints.map((point: string, idx: number) => (
-            <li key={idx}>{point}</li>
-          ))}
-        </ul>
-      </section>
-    )}
+        {/* ✨ Important Points */}
+        {importantPoints.length > 0 && (
+          <section className="p-4 bg-black/40 rounded-lg border border-white/20">
+            <h2 className="text-lg font-semibold mb-3">✨ Important Points</h2>
+            <ul className="list-disc pl-6 space-y-1">
+              {importantPoints.map((point: string, idx: number) => (
+                <li key={idx}>{point}</li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-    {/* ⚠️ What Happens If You Ignore This */}
-    {whatHappensIfYouIgnoreThis && (
-      <section>
-        <h2 className="text-lg font-semibold mb-3">
-          ⚠️ What Happens If You Ignore This
-        </h2>
-        <p>{whatHappensIfYouIgnoreThis}</p>
-      </section>
-    )}
+        {/* ⚠️ What Happens If You Ignore This */}
+        {whatHappensIfYouIgnoreThis && (
+          <section className="p-4 bg-black/40 rounded-lg border border-white/20">
+            <h2 className="text-lg font-semibold mb-3">
+              ⚠️ What Happens If You Ignore This
+            </h2>
+            <p>{whatHappensIfYouIgnoreThis}</p>
+          </section>
+        )}
 
-    {/* ✅ What You Should Do Now */}
-    {whatYouShouldDoNow.length > 0 && (
-      <section>
-        <h2 className="text-lg font-semibold mb-3">
-          ✅ What You Should Do Now
-        </h2>
-        <ul className="list-disc pl-6 space-y-1">
-          {whatYouShouldDoNow.map((point: string, idx: number) => (
-            <li key={idx}>{point}</li>
-          ))}
-        </ul>
-      </section>
-    )}
+        {/* ✅ What You Should Do Now */}
+        {whatYouShouldDoNow.length > 0 && (
+          <section className="p-4 bg-black/40 rounded-lg border border-white/20">
+            <h2 className="text-lg font-semibold mb-3">
+              ✅ What You Should Do Now
+            </h2>
+            <ul className="list-disc pl-6 space-y-1">
+              {whatYouShouldDoNow.map((point: string, idx: number) => (
+                <li key={idx}>{point}</li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-    {/* 📑 Clauses */}
-    {clausesList.length > 0 && (
-      <section>
-        <h2 className="text-lg font-semibold mb-3">📑 Clauses</h2>
-        <div className="space-y-4">
-          {clausesList.map((clauseObj: any, idx: number) => (
-            <div
-              key={idx}
-              className="p-4 border border-amber-200/20 rounded-lg bg-transparent shadow-sm"
-            >
-              <p className="font-medium mb-2">
-                {clauseObj.clause || "N/A"}
-              </p>
-              {clauseObj.explanation?.Explanation && (
-                <p className="text-sm">
-                  <span className="font-semibold">Explanation: </span>
-                  {clauseObj.explanation.Explanation}
-                </p>
-              )}
-              {clauseObj.explanation?.PunishmentDetails && (
-                <p className="text-sm mt-1">
-                  <span className="font-semibold">Punishment: </span>
-                  {clauseObj.explanation.PunishmentDetails}
-                </p>
-              )}
+        {/* 📑 Clauses */}
+        {clausesList.length > 0 && (
+          <section className="p-4 bg-black/40 rounded-lg border border-white/20">
+            <h2 className="text-lg font-semibold mb-3">📑 Clauses</h2>
+            <div className="space-y-4">
+              {clausesList.map((clauseObj: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="p-4 bg-black/40 rounded-lg border border-white/20"
+                >
+                  <p className="font-medium mb-2">
+                    {clauseObj.clause || "N/A"}
+                  </p>
+                  {clauseObj.explanation?.Explanation && (
+                    <p className="text-sm">
+                      <span className="font-semibold">Explanation: </span>
+                      {clauseObj.explanation.Explanation}
+                    </p>
+                  )}
+                  {clauseObj.explanation?.PunishmentDetails && (
+                    <p className="text-sm mt-1">
+                      <span className="font-semibold">Punishment: </span>
+                      {clauseObj.explanation.PunishmentDetails}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </section>
-    )}
+          </section>
+        )}
 
-    {/* 📌 Main Risks, Rights & Consequences */}
-    {mainRisksRightsConsequences && (
-      <section>
-        <h2 className="text-lg font-semibold mb-3">
-          📌 Main Risks, Rights & Consequences
-        </h2>
-        <p>{mainRisksRightsConsequences}</p>
-      </section>
-    )}
+        {/* 📌 Main Risks, Rights & Consequences */}
+        {mainRisksRightsConsequences && (
+          <section className="p-4 bg-black/40 rounded-lg border border-white/20">
+            <h2 className="text-lg font-semibold mb-3">
+              📌 Main Risks, Rights & Consequences
+            </h2>
+            <p>{mainRisksRightsConsequences}</p>
+          </section>
+        )}
 
-    {/* 📝 Important Note */}
-    {importantNote && (
-      <section>
-        <h2 className="text-lg font-semibold mb-3">📝 Important Note</h2>
-        <p>{importantNote}</p>
-      </section>
-    )}
-  </div>
+        {/* 📝 Important Note */}
+        {importantNote && (
+          <section className="p-4 bg-black/40 rounded-lg border border-white/20">
+            <h2 className="text-lg font-semibold mb-3">📝 Important Note</h2>
+            <p>{importantNote}</p>
+          </section>
+        )}
+      </div>
 
-  {/* 💬 Chat input bar */}
-  <div className="border-t border-amber-200/20 p-4 bg-transparent sticky bottom-0 flex items-center gap-2">
-    <input
-      type="text"
-      placeholder="Ask something about this document..."
-      value={chatInput}
-      onChange={(e) => setChatInput(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          console.log("Send:", chatInput);
-          setChatInput("");
-        }
-      }}
-      className="flex-1 border border-amber-200/30 bg-transparent text-amber-50 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
-    />
-    <button
-      onClick={() => {
-        console.log("Send:", chatInput);
-        setChatInput("");
-      }}
-      className="p-2 bg-amber-500 text-black rounded-full hover:bg-amber-400"
-    >
-      <Send size={18} />
-    </button>
-  </div>
-</div>
-
+      {/* 💬 Chat input bar */}
+      <div className="border-t border-white/20 p-4 bg-black/40 sticky bottom-0 flex items-center gap-2">
+        <input
+          type="text"
+          placeholder="Ask something about this document..."
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              console.log("Send:", chatInput);
+              setChatInput("");
+            }
+          }}
+          className="flex-1 border border-white/30 bg-transparent text-amber-50 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        />
+        <button
+          onClick={() => {
+            console.log("Send:", chatInput);
+            setChatInput("");
+          }}
+          className="p-2 bg-amber-500 text-black rounded-full hover:bg-amber-400"
+        >
+          <Send size={18} />
+        </button>
+      </div>
+    </div>
   );
 }

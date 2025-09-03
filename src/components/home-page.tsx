@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Display from "../components/Display";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { motion } from "motion/react";
 
 export default function HomePage({ user }: { user: any }) {
   const supabase = createClientComponentClient();
@@ -12,7 +13,7 @@ export default function HomePage({ user }: { user: any }) {
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    setResult(null); // clear old result
+    setResult(null);
 
     const formData = new FormData(e.currentTarget);
 
@@ -49,37 +50,55 @@ export default function HomePage({ user }: { user: any }) {
     setLoading(false);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
-
   return (
-    <main className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Legal Document Analyzer</h1>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 bg-blue-800 text-white rounded"
+    <main className="flex flex-col h-full bg-transparent p-6 text-white">
+      <motion.div
+        initial={{ y: "50%", translateY: "-50%", opacity: 0 }}
+        animate={{
+          y: result ? 0 : "50%",
+          translateY: result ? "0%" : "-50%",
+          opacity: 1,
+        }}
+        transition={{ duration: 0.6, ease: "easeInOut" }}
+        className={`flex flex-col items-center justify-center text-center ${
+          result ? "mb-6" : "h-full"
+        }`}
+      >
+        <h1 className="text-3xl font-bold mb-6">PSM Ka BDSM Ai</h1>
+
+        <form
+          onSubmit={handleUpload}
+          className="flex flex-col items-center gap-4"
         >
-          Logout
-        </button>
-      </div>
+          <input
+            type="file"
+            name="file"
+            required
+            className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 
+                     file:rounded-lg file:border-0 
+                     file:text-sm file:font-semibold
+                     file:bg-blue-900 file:text-white 
+                     hover:file:bg-blue-700"
+          />
+          <button
+            type="submit"
+            className="px-6 py-2 bg-blue-800 hover:bg-blue-600 text-white rounded-lg"
+          >
+            {loading ? "Processing..." : "Upload"}
+          </button>
+        </form>
+      </motion.div>
 
-      <p className="mb-4">
-        Logged in as <b>{user.email}</b>
-      </p>
-
-      <form onSubmit={handleUpload} className="space-y-4">
-        <input type="file" name="file" required />
-        <button
-          type="submit"
-          className="px-4 py-2 bg-blue-600 text-white rounded"
+      {result && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="flex-1 overflow-y-auto max-w-4xl mx-auto w-full"
         >
-          {loading ? "Processing..." : "Upload"}
-        </button>
-      </form>
-
-      <Display data={result} loading={loading} />
+          <Display data={result} loading={loading} />
+        </motion.div>
+      )}
     </main>
   );
 }
