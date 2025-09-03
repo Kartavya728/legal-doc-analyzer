@@ -1,8 +1,7 @@
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { processCriminalCase } from "./nodes/cat1"; // Assuming correct relative path
+import { processCriminalCase } from "./nodes/cat1";
 
-// ✅ Initialize Gemini LLM
 const llm = new ChatGoogleGenerativeAI({
   model: "gemini-1.5-flash",
   apiKey: process.env.GOOGLE_GENAI_API_KEY,
@@ -19,42 +18,47 @@ const categories = [
   "Personal Legal Documents",
 ];
 
-/**
- * Classify a chunk of text into level-1 legal category
- */
-async function classifyLevel1(chunkText: string): Promise<string> {
+/** classify top-level category */
+async function classifyLevel1(chunk: string): Promise<string> {
   const prompt = `
-You are a legal assistant. Classify the following document into one of these categories:
-${categories.map((c, i) => `${i + 1}. ${c}`).join("\n")}
-
-Document:
-${chunkText}
-
-Return only the category name.`;
-
+Classify this legal document into ONE of:
+${categories.map((c) => "- " + c).join("\n")}
+Text:
+"""${chunk}"""
+Return only category name.`;
   const result = await llm.invoke(prompt);
   return (result.content as string).trim();
 }
 
-/**
- * Main LangGraph pipeline
- */
-export async function runLangGraph(input: {
-  engText: string;
-  structure: any;
+/** generate short title */
+async function generateTitle(text: string, filename: string): Promise<string> {
+  const prompt = `
+Generate a short, descriptive title (<=8 words) for this legal document.
+Filename: ${filename}
+Text: ${text.slice(0, 800)}
+Return only the title.`;
+  const result = await llm.invoke(prompt);
+  return (result.content as string).trim();
+}
+
+/** Main LangGraph router */
+export async function runLanggraph({
+  text,
+  filename,
+  structure,
+}: {
+  text: string;
   filename: string;
+  structure: any;
 }) {
-  // Step 1: Split text into chunks
   const splitter = new RecursiveCharacterTextSplitter({
     chunkSize: 1000,
     chunkOverlap: 100,
   });
-  const chunks = await splitter.splitText(input.engText);
+  const chunks = await splitter.splitText(text);
 
-  // Step 2: Classify each chunk
+  // classify chunks
   const chunkCategories = await Promise.all(chunks.map(classifyLevel1));
-
-  // Step 3: Majority vote
   const category =
     chunkCategories.sort(
       (a, b) =>
@@ -62,22 +66,20 @@ export async function runLangGraph(input: {
         chunkCategories.filter((v) => v === b).length
     ).pop() || null;
 
-  let extracted: any = null;
-
-  // Step 4: Route to cat1 if litigation/criminal
+  let processed: any = {};
   if (category === "Litigation & Court Documents") {
-    extracted = await processCriminalCase({
-      text: input.engText,
-      structure: input.structure,
-      filename: input.filename,
-    });
+    processed = await processCriminalCase({ text, filename, structure });
   }
 
+  const title = await generateTitle(text, filename);
+
   return {
-    filename: input.filename,
-    text: input.engText,
-    structure: input.structure,
+    filename,
+    content: text,
     category,
-    ...extracted,
+    title,
+    metadata: processed,
+    summary: processed?.summary || null,
+    important_points: processed?.important_points || [],
   };
 }

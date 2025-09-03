@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@/lib/utils";
-import React, { useState, createContext, useContext } from "react";
+import React, { useState, useEffect, createContext, useContext } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   IconMenu2,
@@ -12,14 +12,22 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 interface Links {
   label: string;
-  href: string;
-  icon: React.JSX.Element | React.ReactNode;
+  href?: string;
+  icon?: React.JSX.Element | React.ReactNode;
+  onClick?: () => void;
 }
 
 interface SidebarContextProps {
   open: boolean;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   animate: boolean;
+}
+
+interface DocumentItem {
+  id: string;
+  title: string | null;
+  file_name: string | null;
+  created_at: string;
 }
 
 const SidebarContext = createContext<SidebarContextProps | undefined>(
@@ -167,10 +175,10 @@ export const SidebarLink = ({
 }) => {
   const { open, animate } = useSidebar();
   return (
-    <a
-      href={link.href}
+    <button
+      onClick={link.onClick}
       className={cn(
-        "flex items-center justify-start gap-2 group/sidebar py-2 hover:text-blue-400 transition-colors",
+        "flex items-center justify-start gap-2 group/sidebar py-2 hover:text-blue-400 transition-colors w-full text-left",
         className
       )}
       {...props}
@@ -185,7 +193,7 @@ export const SidebarLink = ({
       >
         {link.label}
       </motion.span>
-    </a>
+    </button>
   );
 };
 
@@ -194,7 +202,7 @@ const SidebarFooter = () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.href = "/login";
+    window.location.href = "/";
   };
 
   return (
@@ -212,12 +220,75 @@ const SidebarFooter = () => {
   );
 };
 
-export const SidebarDemo = () => {
+export const SidebarDemo = ({
+  onSelectHistory,
+}: {
+  onSelectHistory: (id: string) => void;
+}) => {
+  const supabase = createClientComponentClient();
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => {
+    if (!showHistory) return;
+
+    const fetchDocuments = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, title, file_name, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        setDocuments(data);
+      }
+    };
+
+    fetchDocuments();
+  }, [supabase, showHistory]);
+
   return (
     <Sidebar>
       <SidebarBody>
-        <SidebarLink link={{ label: "Dashboard", href: "/", icon: <span>🏠</span> }} />
-        <SidebarLink link={{ label: "History", href: "/history", icon: <span>📄</span> }} />
+        <SidebarLink
+          link={{
+            label: "Dashboard",
+            icon: <span>🏠</span>,
+            onClick: () => window.location.assign("/"),
+          }}
+        />
+
+        {/* Documents Section */}
+        <div className="mt-4">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="text-xs uppercase text-neutral-400 mb-2 hover:text-blue-400 transition"
+          >
+            {showHistory ? "Hide Documents ▲" : "Show Documents ▼"}
+          </button>
+
+          {showHistory && (
+            <div className="flex flex-col gap-1">
+              {documents.length === 0 && (
+                <div className="text-neutral-500 text-sm">No documents yet</div>
+              )}
+              {documents.map((doc) => (
+                <SidebarLink
+                  key={doc.id}
+                  link={{
+                    label: doc.title || doc.file_name || "Untitled Document",
+                    onClick: () => onSelectHistory(doc.id),
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </SidebarBody>
     </Sidebar>
   );

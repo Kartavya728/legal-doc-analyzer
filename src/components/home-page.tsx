@@ -1,14 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import Display from "../components/Display";
+import { useState, useEffect } from "react";
+import Display from "./Display";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { motion } from "motion/react";
 
-export default function HomePage({ user }: { user: any }) {
+interface HomePageProps {
+  user: any;
+  document?: any; // 📄 Selected document from sidebar
+}
+
+export default function HomePage({ user, document }: HomePageProps) {
   const supabase = createClientComponentClient();
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+
+  // 🔹 When sidebar selects a document → update display
+  useEffect(() => {
+    if (document) {
+      setResult(document);
+    }
+  }, [document]);
 
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -39,7 +51,7 @@ export default function HomePage({ user }: { user: any }) {
       const data = await res.json();
 
       if (res.ok) {
-        setResult(data.result);
+        setResult(data.result); // ✅ Upload result shown in Display
       } else {
         alert("Error: " + data.error);
       }
@@ -52,42 +64,42 @@ export default function HomePage({ user }: { user: any }) {
 
   return (
     <main className="flex flex-col h-full bg-transparent p-6 text-white">
-      <motion.div
-        initial={{ y: "50%", translateY: "-50%", opacity: 0 }}
-        animate={{
-          y: result ? 0 : "50%",
-          translateY: result ? "0%" : "-50%",
-          opacity: 1,
-        }}
-        transition={{ duration: 0.6, ease: "easeInOut" }}
-        className={`flex flex-col items-center justify-center text-center ${
-          result ? "mb-6" : "h-full"
-        }`}
-      >
-        <h1 className="text-3xl font-bold mb-6">PSM Ka BDSM Ai</h1>
-
-        <form
-          onSubmit={handleUpload}
-          className="flex flex-col items-center gap-4"
+      {!result && (
+        <motion.div
+          initial={{ y: "50%", translateY: "-50%", opacity: 0 }}
+          animate={{
+            y: "50%",
+            translateY: "-50%",
+            opacity: 1,
+          }}
+          transition={{ duration: 0.6, ease: "easeInOut" }}
+          className="flex flex-col items-center justify-center text-center h-full"
         >
-          <input
-            type="file"
-            name="file"
-            required
-            className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 
-                     file:rounded-lg file:border-0 
-                     file:text-sm file:font-semibold
-                     file:bg-blue-900 file:text-white 
-                     hover:file:bg-blue-700"
-          />
-          <button
-            type="submit"
-            className="px-6 py-2 bg-blue-800 hover:bg-blue-600 text-white rounded-lg"
+          <h1 className="text-3xl font-bold mb-6">PSM Ka BDSM Ai</h1>
+
+          <form
+            onSubmit={handleUpload}
+            className="flex flex-col items-center gap-4"
           >
-            {loading ? "Processing..." : "Upload"}
-          </button>
-        </form>
-      </motion.div>
+            <input
+              type="file"
+              name="file"
+              required
+              className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 
+                       file:rounded-lg file:border-0 
+                       file:text-sm file:font-semibold
+                       file:bg-blue-900 file:text-white 
+                       hover:file:bg-blue-700"
+            />
+            <button
+              type="submit"
+              className="px-6 py-2 bg-blue-800 hover:bg-blue-600 text-white rounded-lg"
+            >
+              {loading ? "Processing..." : "Upload"}
+            </button>
+          </form>
+        </motion.div>
+      )}
 
       {result && (
         <motion.div
