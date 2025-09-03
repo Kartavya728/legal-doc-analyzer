@@ -12,6 +12,7 @@ export default function HomePage({ user }: { user: any }) {
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
+    setResult(null); // clear old result
 
     const formData = new FormData(e.currentTarget);
 
@@ -58,13 +59,15 @@ export default function HomePage({ user }: { user: any }) {
         <h1 className="text-2xl font-bold">Legal Document Analyzer</h1>
         <button
           onClick={handleLogout}
-          className="px-4 py-2 bg-red-600 text-white rounded"
+          className="px-4 py-2 bg-blue-800 text-white rounded"
         >
           Logout
         </button>
       </div>
 
-      <p className="mb-4">Logged in as <b>{user.email}</b></p>
+      <p className="mb-4">
+        Logged in as <b>{user.email}</b>
+      </p>
 
       <form onSubmit={handleUpload} className="space-y-4">
         <input type="file" name="file" required />
@@ -76,7 +79,7 @@ export default function HomePage({ user }: { user: any }) {
         </button>
       </form>
 
-      {result && <Display data={result} />}
+      <Display data={result} loading={loading} />
     </main>
   );
 }
