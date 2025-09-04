@@ -23,55 +23,56 @@ async function callLLM(prompt: string): Promise<string> {
 
 /* ----------------- PROMPTS ------------------ */
 
-async function classifyCriminalLevel2(clause: string) {
+async function classifyContractLevel2(clause: string) {
   const prompt = `
-You are a legal assistant specializing in Criminal Law.
+You are a legal assistant specializing in Contracts & Agreements.
 Classify the following clause into one of these sub-categories:
-- Offenses & Crimes
-- Procedures
-- Punishments & Sentences
-- Rights & Protections
-- Jurisdiction & Authority
+- Parties & Definitions
+- Rights & Obligations
+- Payment Terms
+- Termination & Breach
+- Dispute Resolution
 Clause:
 """${clause}"""
 Return only the sub-category name.`;
   return callLLM(prompt);
 }
 
-async function extractCriminalAttributes(clause: string) {
+async function extractContractAttributes(clause: string) {
   const prompt = `
 Extract structured attributes in JSON:
-- OffenseType
-- ProcedureStep
-- Punishment
-- RightsProtections
-- Authority
+- Parties
+- Obligations
+- PaymentTerms
+- TerminationClause
+- DisputeResolution
 - OtherNotes
 Clause:
 """${clause}"""`;
   return callLLM(prompt);
 }
 
-async function explainCriminalClause(clause: string) {
+async function explainContractClause(clause: string) {
   const prompt = `
-Explain the clause simply, and extract punishment details.
+Explain this contract clause simply.
 Return JSON:
 - Explanation
-- PunishmentDetails
+- KeyRisk
 Clause:
 """${clause}"""`;
   return callLLM(prompt);
 }
 
-async function extractCaseDetails(clause: string) {
+async function extractContractDetails(clause: string) {
   const prompt = `
-Extract details as JSON:
-- Complainant
-- Investigator
-- Court
+Extract contract details as JSON:
+- PartyA
+- PartyB
+- Obligation
+- Payment
+- Termination
+- DisputeMechanism
 - Section
-- Date
-- Punishment
 - OtherNotes
 Clause:
 """${clause}"""`;
@@ -80,7 +81,7 @@ Clause:
 
 async function deduplicateDetails(rawDetails: any) {
   const prompt = `
-Deduplicate overlapping case details. Return JSON list.
+Deduplicate overlapping contract details. Return JSON list.
 Data:
 ${JSON.stringify(rawDetails, null, 2)}`;
   return callLLM(prompt);
@@ -88,7 +89,7 @@ ${JSON.stringify(rawDetails, null, 2)}`;
 
 async function summarizeWithAdvice(json: any) {
   const prompt = `
-Summarize this document in simple language.
+Summarize this contract document in simple language.
 Return JSON:
 - summaryText
 - importantPoints[]
@@ -106,7 +107,7 @@ ${JSON.stringify(json, null, 2)}`;
 
 /* ----------------- MAIN PIPELINE ------------------ */
 
-export async function processCriminalCase(input: {
+export async function processContracts(input: {
   text: string;
   structure: any;
   filename: string;
@@ -122,10 +123,10 @@ export async function processCriminalCase(input: {
   const detailedClauses: any[] = [];
 
   for (const clause of chunks) {
-    const subCategory = await classifyCriminalLevel2(clause);
-    const attributes = await extractCriminalAttributes(clause);
-    const explanation = await explainCriminalClause(clause);
-    const caseDetails = await extractCaseDetails(clause);
+    const subCategory = await classifyContractLevel2(clause);
+    const attributes = await extractContractAttributes(clause);
+    const explanation = await explainContractClause(clause);
+    const details = await extractContractDetails(clause);
 
     explainedClauses.push({
       clause,
@@ -134,7 +135,7 @@ export async function processCriminalCase(input: {
       explanation: tryParse(explanation),
     });
 
-    detailedClauses.push({ caseDetails: tryParse(caseDetails) });
+    detailedClauses.push({ details: tryParse(details) });
   }
 
   const cleanedDetailsRaw = await deduplicateDetails(detailedClauses);
@@ -145,7 +146,7 @@ export async function processCriminalCase(input: {
     filename: input.filename,
     structure: input.structure,
     clauses: explainedClauses,
-    caseDetails: cleanedDetails,
+    details: cleanedDetails,
   });
 
   /* ----------------- FINAL DISPLAY-READY JSON ------------------ */
@@ -154,14 +155,14 @@ export async function processCriminalCase(input: {
     filename: input.filename,
     structure: input.structure,
     clauses: explainedClauses,
-    caseDetails: cleanedDetails,
+    details: cleanedDetails,
     summary: summaryText,
     important_points: importantPoints,
 
     // UI-friendly metadata
     file_name: input.filename,
-    title: "Criminal Case Legal Analysis",
-    category: "Criminal Law",
+    title: "Contract & Agreement Legal Analysis",
+    category: "Contracts & Agreements",
     metadata: {
       processed_at: new Date().toISOString(),
       total_clauses: explainedClauses.length,
@@ -173,39 +174,39 @@ export async function processCriminalCase(input: {
       summaryText,
       importantPoints,
       whatHappensIfYouIgnoreThis:
-        "Ignoring this document could result in missed legal obligations, penalties, or inability to defend your rights.",
+        "Ignoring this contract may lead to breach of obligations, financial penalties, or disputes with the other party.",
       whatYouShouldDoNow: [
-        "Review all extracted clauses carefully.",
-        "Identify obligations and deadlines.",
-        "Seek professional legal consultation.",
-        "Keep this analysis stored securely.",
+        "Review obligations and payment terms carefully.",
+        "Check dispute resolution mechanisms.",
+        "Consult legal counsel before signing or terminating.",
+        "Ensure compliance with deadlines and obligations.",
       ],
       importantNote:
         "⚠️ This summary is AI-generated. Always verify with a licensed legal professional.",
       mainRisksRightsConsequences:
-        "Potential imprisonment, fines, or loss of legal rights under the cited provisions.",
+        "Potential breach of contract, financial penalties, or litigation.",
     },
 
     // Extra sections
     risks: [
-      "Legal punishments if obligations are not fulfilled",
-      "Financial penalties under certain clauses",
-      "Reputational risks in ongoing litigation",
+      "Breach of contract liabilities",
+      "Financial loss from missed payments",
+      "Legal disputes if terms are violated",
     ],
     recommendations: [
-      "Cross-check sections with official criminal law codes.",
-      "Map extracted case details to actual court records.",
-      "Prepare supporting documents for defense.",
+      "Ensure obligations and rights are tracked.",
+      "Maintain documentation of all payments and notices.",
+      "Use dispute resolution methods outlined in the contract.",
     ],
 
     // Traceability: prompts used
     used_prompts: {
-      classifyCriminalLevel2: `You are a legal assistant specializing in Criminal Law. Classify ...`,
-      extractCriminalAttributes: `Extract structured attributes in JSON ...`,
-      explainCriminalClause: `Explain the clause simply, and extract punishment details ...`,
-      extractCaseDetails: `Extract details as JSON ...`,
-      deduplicateDetails: `Deduplicate overlapping case details ...`,
-      summarizeWithAdvice: `Summarize this document in simple language ...`,
+      classifyContractLevel2: `You are a legal assistant specializing in Contracts & Agreements. Classify ...`,
+      extractContractAttributes: `Extract structured attributes in JSON ...`,
+      explainContractClause: `Explain this contract clause simply ...`,
+      extractContractDetails: `Extract contract details as JSON ...`,
+      deduplicateDetails: `Deduplicate overlapping contract details ...`,
+      summarizeWithAdvice: `Summarize this contract document in simple language ...`,
     },
   };
 }

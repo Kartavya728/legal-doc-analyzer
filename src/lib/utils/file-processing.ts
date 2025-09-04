@@ -1,9 +1,8 @@
 // lib/utils/file-processing.ts
-import { ImageAnnotatorClient } from "@google-cloud/vision"; // Use named import
-import { Storage } from "@google-cloud/storage"; // Import Storage
+import { ImageAnnotatorClient } from "@google-cloud/vision";
+import { Storage } from "@google-cloud/storage";
 import fs from "fs";
 import path from "path";
-import { promisify } from "util"; // For fs.unlink
 
 // Always resolve relative to project root
 const keyPath = path.join(process.cwd(), "google-vision-key.json");
@@ -16,36 +15,48 @@ const storageClient = new Storage({
   keyFilename: keyPath,
 });
 
-// Configuration for GCS buckets (replace with your actual bucket names)
-const GCS_INPUT_BUCKET = process.env.GCS_INPUT_BUCKET || "your-ocr-input-bucket";
-const GCS_OUTPUT_BUCKET = process.env.GCS_OUTPUT_BUCKET || "your-ocr-output-bucket";
+// Configuration for GCS buckets
+const GCS_INPUT_BUCKET =
+  process.env.GCS_INPUT_BUCKET || "your-ocr-input-bucket";
+const GCS_OUTPUT_BUCKET =
+  process.env.GCS_OUTPUT_BUCKET || "your-ocr-output-bucket";
 
 // Utility to upload a local file to GCS
-async function uploadFileToGCS(localFilePath: string, bucketName: string, destinationFileName: string): Promise<string> {
+async function uploadFileToGCS(
+  localFilePath: string,
+  bucketName: string,
+  destinationFileName: string
+): Promise<string> {
   const bucket = storageClient.bucket(bucketName);
-  const [file] = await bucket.upload(localFilePath, {
+  await bucket.upload(localFilePath, {
     destination: destinationFileName,
-    resumable: false, // For small files, can be faster
+    resumable: false,
   });
   console.log(`Uploaded ${localFilePath} to gs://${bucketName}/${destinationFileName}`);
   return `gs://${bucketName}/${destinationFileName}`;
 }
 
 // Utility to delete a file from GCS
-async function deleteFileFromGCS(bucketName: string, fileName: string): Promise<void> {
+async function deleteFileFromGCS(
+  bucketName: string,
+  fileName: string
+): Promise<void> {
   const bucket = storageClient.bucket(bucketName);
   await bucket.file(fileName).delete();
   console.log(`Deleted gs://${bucketName}/${fileName}`);
 }
 
 // Utility to read JSON files from GCS (for OCR results)
-async function readJsonFromGCS(bucketName: string, prefix: string): Promise<any[]> {
+async function readJsonFromGCS(
+  bucketName: string,
+  prefix: string
+): Promise<any[]> {
   const [files] = await storageClient.bucket(bucketName).getFiles({ prefix });
   const results: any[] = [];
   for (const file of files) {
-    if (file.name.endsWith('.json')) {
+    if (file.name.endsWith(".json")) {
       const [content] = await file.download();
-      results.push(JSON.parse(content.toString('utf8')));
+      results.push(JSON.parse(content.toString("utf8")));
     }
   }
   return results;
@@ -61,7 +72,6 @@ export async function processFile(filePath: string): Promise<any> {
   let ocrResultWords: string[] = [];
 
   try {
-    // Check if file exists
     if (!fs.existsSync(filePath)) {
       throw new Error(`File not found: ${filePath}`);
     }
@@ -69,7 +79,11 @@ export async function processFile(filePath: string): Promise<any> {
     if (isPdf) {
       // --- PDF Processing Flow (via GCS) ---
       const gcsDestinationFileName = `input/${fileName}`;
-      gcsInputUri = await uploadFileToGCS(filePath, GCS_INPUT_BUCKET, gcsDestinationFileName);
+      gcsInputUri = await uploadFileToGCS(
+        filePath,
+        GCS_INPUT_BUCKET,
+        gcsDestinationFileName
+      );
 
       const gcsOutputPrefix = `output/${fileName}_output/`;
       const gcsOutputUri = `gs://${GCS_OUTPUT_BUCKET}/${gcsOutputPrefix}`;
@@ -84,7 +98,7 @@ export async function processFile(filePath: string): Promise<any> {
             features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
             outputConfig: {
               gcsDestination: { uri: gcsOutputUri },
-              batchSize: 20, // Number of pages per file (optional)
+              batchSize: 20, // split every 20 pages
             },
           },
         ],
@@ -92,24 +106,34 @@ export async function processFile(filePath: string): Promise<any> {
 
       console.log(`Starting async PDF OCR for ${gcsInputUri}`);
       const [operation] = await visionClient.asyncBatchAnnotateFiles(request);
-      const response = await operation.promise(); // Wait for the long-running operation to complete
+      await operation.promise(); // Wait for completion
       console.log(`PDF OCR completed for ${gcsInputUri}`);
 
       // Read results from the output GCS bucket
-      const jsonResults = await readJsonFromGCS(GCS_OUTPUT_BUCKET, gcsOutputPrefix);
+      const jsonResults = await readJsonFromGCS(
+        GCS_OUTPUT_BUCKET,
+        gcsOutputPrefix
+      );
 
       // Aggregate text and words from all pages
+      let pageCounter = 1;
       for (const res of jsonResults) {
-        if (res.responses && res.responses.length > 0 && res.responses[0].fullTextAnnotation) {
-          ocrResultText += res.responses[0].fullTextAnnotation.text + "\n";
-          if (res.responses[0].textAnnotations) {
-            ocrResultWords = ocrResultWords.concat(
-              res.responses[0].textAnnotations.slice(1).map((annotation: any) => annotation.description)
-            );
+        if (res.responses && res.responses.length > 0) {
+          for (const page of res.responses) {
+            if (page.fullTextAnnotation) {
+              ocrResultText += `\n\n--- Page ${pageCounter} ---\n${page.fullTextAnnotation.text}`;
+              if (page.textAnnotations) {
+                ocrResultWords = ocrResultWords.concat(
+                  page.textAnnotations
+                    .slice(1)
+                    .map((annotation: any) => annotation.description)
+                );
+              }
+            }
+            pageCounter++;
           }
         }
       }
-
     } else {
       // --- Image Processing Flow (direct) ---
       const [result] = await visionClient.textDetection(filePath);
@@ -120,7 +144,9 @@ export async function processFile(filePath: string): Promise<any> {
         ocrResultWords = [];
       } else {
         ocrResultText = result.textAnnotations[0].description || "";
-        ocrResultWords = result.textAnnotations.slice(1).map((annotation) => annotation.description);
+        ocrResultWords = result.textAnnotations
+          .slice(1)
+          .map((annotation) => annotation.description);
       }
     }
 
@@ -129,30 +155,23 @@ export async function processFile(filePath: string): Promise<any> {
       text: ocrResultText.trim(),
       words: ocrResultWords,
     };
-
   } catch (error: any) {
     console.error("Error processing file:", error.message);
     throw error;
   } finally {
     // Cleanup: Delete the input file from GCS if it was uploaded
     if (gcsInputUri) {
-      const gcsFileName = gcsInputUri.split('/').slice(3).join('/'); // Extracts "input/fileName"
+      const gcsFileName = gcsInputUri.split("/").slice(3).join("/");
       await deleteFileFromGCS(GCS_INPUT_BUCKET, gcsFileName).catch(console.error);
     }
-    // Also delete the output folder from GCS (optional, but good for cleanup)
+    // Also delete the output folder from GCS
     if (isPdf) {
-        const gcsOutputPrefix = `output/${fileName}_output/`;
-        const [files] = await storageClient.bucket(GCS_OUTPUT_BUCKET).getFiles({ prefix: gcsOutputPrefix });
-        await Promise.all(files.map(f => f.delete())).catch(console.error);
-        console.log(`Cleaned up output folder gs://${GCS_OUTPUT_BUCKET}/${gcsOutputPrefix}`);
+      const gcsOutputPrefix = `output/${fileName}_output/`;
+      const [files] = await storageClient
+        .bucket(GCS_OUTPUT_BUCKET)
+        .getFiles({ prefix: gcsOutputPrefix });
+      await Promise.all(files.map((f) => f.delete())).catch(console.error);
+      console.log(`Cleaned up output folder gs://${GCS_OUTPUT_BUCKET}/${gcsOutputPrefix}`);
     }
   }
 }
-
-// NOTE: extractTextFromImage is no longer needed as processFile handles both
-// If you still need a separate function for just image text, adapt processFile.
-// export async function extractTextFromImage(filePath: string) {
-//   const [result] = await client.textDetection(filePath);
-//   const detections = result.textAnnotations;
-//   return detections && detections.length > 0 ? detections[0].description : "";
-// }

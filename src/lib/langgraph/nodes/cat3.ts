@@ -23,55 +23,55 @@ async function callLLM(prompt: string): Promise<string> {
 
 /* ----------------- PROMPTS ------------------ */
 
-async function classifyCriminalLevel2(clause: string) {
+async function classifyComplianceLevel2(clause: string) {
   const prompt = `
-You are a legal assistant specializing in Criminal Law.
+You are a legal assistant specializing in Regulatory & Compliance law.
 Classify the following clause into one of these sub-categories:
-- Offenses & Crimes
-- Procedures
-- Punishments & Sentences
-- Rights & Protections
-- Jurisdiction & Authority
+- Compliance Obligations
+- Reporting & Disclosure
+- Regulatory Authority
+- Penalties & Enforcement
+- Risk Management
 Clause:
 """${clause}"""
 Return only the sub-category name.`;
   return callLLM(prompt);
 }
 
-async function extractCriminalAttributes(clause: string) {
+async function extractComplianceAttributes(clause: string) {
   const prompt = `
-Extract structured attributes in JSON:
-- OffenseType
-- ProcedureStep
-- Punishment
-- RightsProtections
-- Authority
+Extract structured compliance attributes in JSON:
+- Obligation
+- ReportingRequirement
+- EnforcementBody
+- Penalty
+- RiskFactor
 - OtherNotes
 Clause:
 """${clause}"""`;
   return callLLM(prompt);
 }
 
-async function explainCriminalClause(clause: string) {
+async function explainComplianceClause(clause: string) {
   const prompt = `
-Explain the clause simply, and extract punishment details.
+Explain this compliance clause simply.
 Return JSON:
 - Explanation
-- PunishmentDetails
+- ComplianceRisk
 Clause:
 """${clause}"""`;
   return callLLM(prompt);
 }
 
-async function extractCaseDetails(clause: string) {
+async function extractComplianceDetails(clause: string) {
   const prompt = `
-Extract details as JSON:
-- Complainant
-- Investigator
-- Court
+Extract compliance details as JSON:
+- Obligation
+- ReportingDeadline
+- RegulatoryAuthority
 - Section
-- Date
-- Punishment
+- Penalty
+- Risk
 - OtherNotes
 Clause:
 """${clause}"""`;
@@ -80,7 +80,7 @@ Clause:
 
 async function deduplicateDetails(rawDetails: any) {
   const prompt = `
-Deduplicate overlapping case details. Return JSON list.
+Deduplicate overlapping compliance details. Return JSON list.
 Data:
 ${JSON.stringify(rawDetails, null, 2)}`;
   return callLLM(prompt);
@@ -88,7 +88,7 @@ ${JSON.stringify(rawDetails, null, 2)}`;
 
 async function summarizeWithAdvice(json: any) {
   const prompt = `
-Summarize this document in simple language.
+Summarize this compliance/regulatory document in simple language.
 Return JSON:
 - summaryText
 - importantPoints[]
@@ -106,7 +106,7 @@ ${JSON.stringify(json, null, 2)}`;
 
 /* ----------------- MAIN PIPELINE ------------------ */
 
-export async function processCriminalCase(input: {
+export async function processCompliance(input: {
   text: string;
   structure: any;
   filename: string;
@@ -122,10 +122,10 @@ export async function processCriminalCase(input: {
   const detailedClauses: any[] = [];
 
   for (const clause of chunks) {
-    const subCategory = await classifyCriminalLevel2(clause);
-    const attributes = await extractCriminalAttributes(clause);
-    const explanation = await explainCriminalClause(clause);
-    const caseDetails = await extractCaseDetails(clause);
+    const subCategory = await classifyComplianceLevel2(clause);
+    const attributes = await extractComplianceAttributes(clause);
+    const explanation = await explainComplianceClause(clause);
+    const details = await extractComplianceDetails(clause);
 
     explainedClauses.push({
       clause,
@@ -134,7 +134,7 @@ export async function processCriminalCase(input: {
       explanation: tryParse(explanation),
     });
 
-    detailedClauses.push({ caseDetails: tryParse(caseDetails) });
+    detailedClauses.push({ details: tryParse(details) });
   }
 
   const cleanedDetailsRaw = await deduplicateDetails(detailedClauses);
@@ -145,7 +145,7 @@ export async function processCriminalCase(input: {
     filename: input.filename,
     structure: input.structure,
     clauses: explainedClauses,
-    caseDetails: cleanedDetails,
+    details: cleanedDetails,
   });
 
   /* ----------------- FINAL DISPLAY-READY JSON ------------------ */
@@ -154,14 +154,14 @@ export async function processCriminalCase(input: {
     filename: input.filename,
     structure: input.structure,
     clauses: explainedClauses,
-    caseDetails: cleanedDetails,
+    details: cleanedDetails,
     summary: summaryText,
     important_points: importantPoints,
 
     // UI-friendly metadata
     file_name: input.filename,
-    title: "Criminal Case Legal Analysis",
-    category: "Criminal Law",
+    title: "Regulatory & Compliance Legal Analysis",
+    category: "Regulatory & Compliance",
     metadata: {
       processed_at: new Date().toISOString(),
       total_clauses: explainedClauses.length,
@@ -173,39 +173,39 @@ export async function processCriminalCase(input: {
       summaryText,
       importantPoints,
       whatHappensIfYouIgnoreThis:
-        "Ignoring this document could result in missed legal obligations, penalties, or inability to defend your rights.",
+        "Ignoring this compliance document may lead to legal penalties, regulatory sanctions, or reputational damage.",
       whatYouShouldDoNow: [
-        "Review all extracted clauses carefully.",
-        "Identify obligations and deadlines.",
-        "Seek professional legal consultation.",
-        "Keep this analysis stored securely.",
+        "Identify compliance obligations and deadlines.",
+        "Check reporting requirements and disclosure timelines.",
+        "Consult compliance/legal experts.",
+        "Maintain proper records for audits.",
       ],
       importantNote:
-        "⚠️ This summary is AI-generated. Always verify with a licensed legal professional.",
+        "⚠️ This summary is AI-generated. Always verify with a licensed compliance/legal professional.",
       mainRisksRightsConsequences:
-        "Potential imprisonment, fines, or loss of legal rights under the cited provisions.",
+        "Non-compliance may result in penalties, sanctions, or suspension of licenses.",
     },
 
     // Extra sections
     risks: [
-      "Legal punishments if obligations are not fulfilled",
-      "Financial penalties under certain clauses",
-      "Reputational risks in ongoing litigation",
+      "Financial penalties for non-compliance",
+      "Regulatory enforcement actions",
+      "Reputational damage due to disclosure failures",
     ],
     recommendations: [
-      "Cross-check sections with official criminal law codes.",
-      "Map extracted case details to actual court records.",
-      "Prepare supporting documents for defense.",
+      "Set up monitoring for compliance deadlines.",
+      "Engage with regulatory bodies proactively.",
+      "Cross-verify obligations with internal compliance team.",
     ],
 
     // Traceability: prompts used
     used_prompts: {
-      classifyCriminalLevel2: `You are a legal assistant specializing in Criminal Law. Classify ...`,
-      extractCriminalAttributes: `Extract structured attributes in JSON ...`,
-      explainCriminalClause: `Explain the clause simply, and extract punishment details ...`,
-      extractCaseDetails: `Extract details as JSON ...`,
-      deduplicateDetails: `Deduplicate overlapping case details ...`,
-      summarizeWithAdvice: `Summarize this document in simple language ...`,
+      classifyComplianceLevel2: `You are a legal assistant specializing in Regulatory & Compliance law. Classify ...`,
+      extractComplianceAttributes: `Extract structured compliance attributes in JSON ...`,
+      explainComplianceClause: `Explain this compliance clause simply ...`,
+      extractComplianceDetails: `Extract compliance details as JSON ...`,
+      deduplicateDetails: `Deduplicate overlapping compliance details ...`,
+      summarizeWithAdvice: `Summarize this compliance/regulatory document ...`,
     },
   };
 }

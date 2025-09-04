@@ -23,55 +23,56 @@ async function callLLM(prompt: string): Promise<string> {
 
 /* ----------------- PROMPTS ------------------ */
 
-async function classifyCriminalLevel2(clause: string) {
+async function classifyGovtLevel2(clause: string) {
   const prompt = `
-You are a legal assistant specializing in Criminal Law.
+You are a legal assistant specializing in Government & Administrative Law.
 Classify the following clause into one of these sub-categories:
-- Offenses & Crimes
-- Procedures
-- Punishments & Sentences
-- Rights & Protections
-- Jurisdiction & Authority
+- Administrative Procedures
+- Government Powers
+- Citizen Rights
+- Public Obligations
+- Regulatory Bodies
 Clause:
 """${clause}"""
 Return only the sub-category name.`;
   return callLLM(prompt);
 }
 
-async function extractCriminalAttributes(clause: string) {
+async function extractGovtAttributes(clause: string) {
   const prompt = `
 Extract structured attributes in JSON:
-- OffenseType
-- ProcedureStep
-- Punishment
-- RightsProtections
+- Procedure
 - Authority
+- CitizenRights
+- Obligations
+- RegulatoryBody
 - OtherNotes
 Clause:
 """${clause}"""`;
   return callLLM(prompt);
 }
 
-async function explainCriminalClause(clause: string) {
+async function explainGovtClause(clause: string) {
   const prompt = `
-Explain the clause simply, and extract punishment details.
+Explain this government/administrative clause in simple terms.
 Return JSON:
 - Explanation
-- PunishmentDetails
+- ImpactOnCitizenOrAgency
 Clause:
 """${clause}"""`;
   return callLLM(prompt);
 }
 
-async function extractCaseDetails(clause: string) {
+async function extractGovtDetails(clause: string) {
   const prompt = `
-Extract details as JSON:
-- Complainant
-- Investigator
-- Court
+Extract government/administrative details as JSON:
+- Authority
+- Department
+- Regulation
 - Section
 - Date
-- Punishment
+- Obligations
+- Rights
 - OtherNotes
 Clause:
 """${clause}"""`;
@@ -80,7 +81,7 @@ Clause:
 
 async function deduplicateDetails(rawDetails: any) {
   const prompt = `
-Deduplicate overlapping case details. Return JSON list.
+Deduplicate overlapping administrative details. Return JSON list.
 Data:
 ${JSON.stringify(rawDetails, null, 2)}`;
   return callLLM(prompt);
@@ -88,7 +89,7 @@ ${JSON.stringify(rawDetails, null, 2)}`;
 
 async function summarizeWithAdvice(json: any) {
   const prompt = `
-Summarize this document in simple language.
+Summarize this administrative/government document in simple language.
 Return JSON:
 - summaryText
 - importantPoints[]
@@ -106,7 +107,7 @@ ${JSON.stringify(json, null, 2)}`;
 
 /* ----------------- MAIN PIPELINE ------------------ */
 
-export async function processCriminalCase(input: {
+export async function processGovernment(input: {
   text: string;
   structure: any;
   filename: string;
@@ -122,10 +123,10 @@ export async function processCriminalCase(input: {
   const detailedClauses: any[] = [];
 
   for (const clause of chunks) {
-    const subCategory = await classifyCriminalLevel2(clause);
-    const attributes = await extractCriminalAttributes(clause);
-    const explanation = await explainCriminalClause(clause);
-    const caseDetails = await extractCaseDetails(clause);
+    const subCategory = await classifyGovtLevel2(clause);
+    const attributes = await extractGovtAttributes(clause);
+    const explanation = await explainGovtClause(clause);
+    const details = await extractGovtDetails(clause);
 
     explainedClauses.push({
       clause,
@@ -134,7 +135,7 @@ export async function processCriminalCase(input: {
       explanation: tryParse(explanation),
     });
 
-    detailedClauses.push({ caseDetails: tryParse(caseDetails) });
+    detailedClauses.push({ details: tryParse(details) });
   }
 
   const cleanedDetailsRaw = await deduplicateDetails(detailedClauses);
@@ -145,7 +146,7 @@ export async function processCriminalCase(input: {
     filename: input.filename,
     structure: input.structure,
     clauses: explainedClauses,
-    caseDetails: cleanedDetails,
+    details: cleanedDetails,
   });
 
   /* ----------------- FINAL DISPLAY-READY JSON ------------------ */
@@ -154,14 +155,14 @@ export async function processCriminalCase(input: {
     filename: input.filename,
     structure: input.structure,
     clauses: explainedClauses,
-    caseDetails: cleanedDetails,
+    details: cleanedDetails,
     summary: summaryText,
     important_points: importantPoints,
 
     // UI-friendly metadata
     file_name: input.filename,
-    title: "Criminal Case Legal Analysis",
-    category: "Criminal Law",
+    title: "Government & Administrative Legal Analysis",
+    category: "Government & Administrative",
     metadata: {
       processed_at: new Date().toISOString(),
       total_clauses: explainedClauses.length,
@@ -173,39 +174,39 @@ export async function processCriminalCase(input: {
       summaryText,
       importantPoints,
       whatHappensIfYouIgnoreThis:
-        "Ignoring this document could result in missed legal obligations, penalties, or inability to defend your rights.",
+        "Ignoring this document may result in penalties, compliance failures, or loss of rights before administrative bodies.",
       whatYouShouldDoNow: [
-        "Review all extracted clauses carefully.",
-        "Identify obligations and deadlines.",
+        "Review extracted obligations and rights carefully.",
+        "Cross-check regulatory authority requirements.",
         "Seek professional legal consultation.",
         "Keep this analysis stored securely.",
       ],
       importantNote:
         "⚠️ This summary is AI-generated. Always verify with a licensed legal professional.",
       mainRisksRightsConsequences:
-        "Potential imprisonment, fines, or loss of legal rights under the cited provisions.",
+        "Potential administrative penalties, compliance failures, or missed obligations.",
     },
 
     // Extra sections
     risks: [
-      "Legal punishments if obligations are not fulfilled",
-      "Financial penalties under certain clauses",
-      "Reputational risks in ongoing litigation",
+      "Regulatory penalties for non-compliance",
+      "Administrative delays or denial of rights",
+      "Financial or reputational damage",
     ],
     recommendations: [
-      "Cross-check sections with official criminal law codes.",
-      "Map extracted case details to actual court records.",
-      "Prepare supporting documents for defense.",
+      "Map obligations to your compliance calendar.",
+      "Consult relevant administrative authority guidelines.",
+      "Maintain documentation for audits or reviews.",
     ],
 
     // Traceability: prompts used
     used_prompts: {
-      classifyCriminalLevel2: `You are a legal assistant specializing in Criminal Law. Classify ...`,
-      extractCriminalAttributes: `Extract structured attributes in JSON ...`,
-      explainCriminalClause: `Explain the clause simply, and extract punishment details ...`,
-      extractCaseDetails: `Extract details as JSON ...`,
-      deduplicateDetails: `Deduplicate overlapping case details ...`,
-      summarizeWithAdvice: `Summarize this document in simple language ...`,
+      classifyGovtLevel2: `You are a legal assistant specializing in Government & Administrative Law. Classify ...`,
+      extractGovtAttributes: `Extract structured attributes in JSON ...`,
+      explainGovtClause: `Explain this government/administrative clause ...`,
+      extractGovtDetails: `Extract government/administrative details as JSON ...`,
+      deduplicateDetails: `Deduplicate overlapping administrative details ...`,
+      summarizeWithAdvice: `Summarize this administrative/government document ...`,
     },
   };
 }

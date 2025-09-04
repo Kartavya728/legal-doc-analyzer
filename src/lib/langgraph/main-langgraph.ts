@@ -1,6 +1,14 @@
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+
+// Import category processors
 import { processCriminalCase } from "./nodes/cat1";
+import { processContracts } from "./nodes/cat2";
+import { processCompliance } from "./nodes/cat3";
+import { processGovernance } from "./nodes/cat4";
+import { processPropertyDocs } from "./nodes/cat5";
+import { processGovernment } from "./nodes/cat6";
+import { processPersonalDocs } from "./nodes/cat7";
 
 const llm = new ChatGoogleGenerativeAI({
   model: "gemini-1.5-flash",
@@ -67,8 +75,31 @@ export async function runLanggraph({
     ).pop() || null;
 
   let processed: any = {};
-  if (category === "Litigation & Court Documents") {
-    processed = await processCriminalCase({ text, filename, structure });
+
+  switch (category) {
+    case "Litigation & Court Documents":
+      processed = await processCriminalCase({ text, filename, structure });
+      break;
+    case "Contracts & Agreements":
+      processed = await processContracts({ text, filename, structure });
+      break;
+    case "Regulatory & Compliance":
+      processed = await processCompliance({ text, filename, structure });
+      break;
+    case "Corporate Governance Documents":
+      processed = await processGovernance({ text, filename, structure });
+      break;
+    case "Property & Real Estate":
+      processed = await processPropertyDocs({ text, filename, structure });
+      break;
+    case "Government & Administrative":
+      processed = await processGovernment({ text, filename, structure });
+      break;
+    case "Personal Legal Documents":
+      processed = await processPersonalDocs({ text, filename, structure });
+      break;
+    default:
+      processed = {};
   }
 
   const title = await generateTitle(text, filename);

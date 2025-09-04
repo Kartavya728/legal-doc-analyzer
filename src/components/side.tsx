@@ -189,7 +189,8 @@ export const SidebarLink = ({
           display: animate ? (open ? "inline-block" : "none") : "inline-block",
           opacity: animate ? (open ? 1 : 0) : 1,
         }}
-        className="text-sm whitespace-pre inline-block !p-0 !m-0"
+        className="text-sm whitespace-pre inline-block !p-0 !m-0 truncate max-w-[200px]"
+        title={link.label} // tooltip on hover
       >
         {link.label}
       </motion.span>
@@ -199,6 +200,7 @@ export const SidebarLink = ({
 
 const SidebarFooter = () => {
   const supabase = createClientComponentClient();
+  const { open, animate } = useSidebar();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -207,14 +209,43 @@ const SidebarFooter = () => {
 
   return (
     <div className="flex flex-col gap-2 border-t border-[#1B263B] pt-2">
+      {/* Logout */}
       <button
         onClick={handleLogout}
         className="flex items-center gap-2 px-2 py-1 text-sm hover:text-red-500 transition-colors"
       >
-        <IconLogout size={18} /> Logout
+        <IconLogout size={18} />
+        <motion.span
+          animate={{
+            display: animate
+              ? open
+                ? "inline-block"
+                : "none"
+              : "inline-block",
+            opacity: animate ? (open ? 1 : 0) : 1,
+          }}
+          className="truncate max-w-[200px]"
+        >
+          Logout
+        </motion.span>
       </button>
+
+      {/* Settings */}
       <button className="flex items-center gap-2 px-2 py-1 text-sm hover:text-blue-400 transition-colors">
-        <IconSettings size={18} /> Settings
+        <IconSettings size={18} />
+        <motion.span
+          animate={{
+            display: animate
+              ? open
+                ? "inline-block"
+                : "none"
+              : "inline-block",
+            opacity: animate ? (open ? 1 : 0) : 1,
+          }}
+          className="truncate max-w-[200px]"
+        >
+          Settings
+        </motion.span>
       </button>
     </div>
   );
@@ -227,11 +258,8 @@ export const SidebarDemo = ({
 }) => {
   const supabase = createClientComponentClient();
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
-    if (!showHistory) return;
-
     const fetchDocuments = async () => {
       const {
         data: { user },
@@ -250,44 +278,40 @@ export const SidebarDemo = ({
     };
 
     fetchDocuments();
-  }, [supabase, showHistory]);
+  }, [supabase]);
 
   return (
     <Sidebar>
       <SidebarBody>
+        {/* Dashboard link */}
         <SidebarLink
           link={{
-            label: "Dashboard",
-            icon: <span>🏠</span>,
+            label: "Upload New Document",
+            icon: <span>❇️</span>,
             onClick: () => window.location.assign("/"),
           }}
         />
 
         {/* Documents Section */}
-        <div className="mt-4">
-          <button
-            onClick={() => setShowHistory(!showHistory)}
-            className="text-xs uppercase text-neutral-400 mb-2 hover:text-blue-400 transition"
-          >
-            {showHistory ? "Hide Documents ▲" : "Show Documents ▼"}
-          </button>
+        <div className="mt-4 flex flex-col gap-1">
+          <div className="text-xs uppercase text-neutral-400 mb-1">
+            All Docs
+          </div>
 
-          {showHistory && (
-            <div className="flex flex-col gap-1">
-              {documents.length === 0 && (
-                <div className="text-neutral-500 text-sm">No documents yet</div>
-              )}
-              {documents.map((doc) => (
-                <SidebarLink
-                  key={doc.id}
-                  link={{
-                    label: doc.title || doc.file_name || "Untitled Document",
-                    onClick: () => onSelectHistory(doc.id),
-                  }}
-                />
-              ))}
-            </div>
+          {documents.length === 0 && (
+            <div className="text-neutral-500 text-sm">No documents yet</div>
           )}
+
+          {documents.map((doc) => (
+            <SidebarLink
+              key={doc.id}
+              link={{
+                label: doc.title || doc.file_name || "Untitled Document",
+                icon: <span>📄</span>,
+                onClick: () => onSelectHistory(doc.id),
+              }}
+            />
+          ))}
         </div>
       </SidebarBody>
     </Sidebar>

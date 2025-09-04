@@ -1,5 +1,6 @@
-// Build a single vector using Google AI Studio embeddings (text-embedding-004)
+// lib/utils/embeddings.ts
 import { createClient } from "@supabase/supabase-js";
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 
 const API_KEY = process.env.GOOGLE_GENAI_API_KEY!;
 const EMB_MODEL = "models/text-embedding-004";
@@ -19,8 +20,7 @@ export async function embedText(text: string): Promise<number[]> {
     throw new Error(`Embedding API error ${res.status}: ${msg}`);
   }
   const data = await res.json();
-  const vec = data?.embedding?.values || data?.data?.[0]?.embedding || [];
-  return vec;
+  return data?.embedding?.values || [];
 }
 
 export async function saveWithEmbedding(
@@ -32,37 +32,49 @@ export async function saveWithEmbedding(
     structure: any;
     category: string;
     json: any;
+    title?: string;
   }
 ) {
-  const vector = await embedText(`${payload.text}\n${JSON.stringify(payload.json)}`);
-
-  // documents table (json + metadata)
+  // 1️⃣ Create base document row
   const { data: doc, error: dErr } = await supabase
     .from("documents")
     .insert({
       user_id: payload.user_id,
       file_name: payload.file_name,
-      original_text: payload.text,          // keep original language? we pass engText so it's English
-      translated_text: payload.text,        // also store as translated
+      original_text: payload.text,
+      translated_text: payload.text,
       summary: payload.json?.summary || null,
-      structured: payload.json,             // JSONB column (add in schema)
+      structured: payload.json,
       category: payload.category,
-      structure: payload.structure,         // JSONB column (add in schema)
+      structure: payload.structure,
+      title: payload.title || payload.file_name,
     })
     .select()
     .single();
 
   if (dErr) throw dErr;
 
-  // document_embeddings table (pgvector column: embedding vector)
-  const { error: eErr } = await supabase
-    .from("document_embeddings")
-    .insert({
+  // 2️⃣ Split text into safe chunks
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 6000, // ~2k tokens
+    chunkOverlap: 200,
+  });
+  const chunks = await splitter.splitText(payload.text);
+
+  // 3️⃣ Embed each chunk & save
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const vector = await embedText(chunk);
+
+    const { error: eErr } = await supabase.from("document_embeddings").insert({
       document_id: doc.id,
-      embedding: vector as unknown as any, // supabase-js will map to vector
+      chunk_index: i,
+      chunk_text: chunk,
+      embedding: vector as unknown as any,
     });
 
-  if (eErr) throw eErr;
+    if (eErr) throw eErr;
+  }
 
   return doc;
 }

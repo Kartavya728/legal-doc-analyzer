@@ -23,55 +23,59 @@ async function callLLM(prompt: string): Promise<string> {
 
 /* ----------------- PROMPTS ------------------ */
 
-async function classifyCriminalLevel2(clause: string) {
+async function classifyPropertyLevel2(clause: string) {
   const prompt = `
-You are a legal assistant specializing in Criminal Law.
+You are a legal assistant specializing in Property & Real Estate Law.
 Classify the following clause into one of these sub-categories:
-- Offenses & Crimes
-- Procedures
-- Punishments & Sentences
-- Rights & Protections
-- Jurisdiction & Authority
+- Ownership & Title
+- Lease & Rental
+- Sale & Transfer
+- Mortgage & Finance
+- Land Use & Zoning
+- Dispute & Litigation
 Clause:
 """${clause}"""
 Return only the sub-category name.`;
   return callLLM(prompt);
 }
 
-async function extractCriminalAttributes(clause: string) {
+async function extractPropertyAttributes(clause: string) {
   const prompt = `
 Extract structured attributes in JSON:
-- OffenseType
-- ProcedureStep
-- Punishment
-- RightsProtections
-- Authority
+- Owner
+- PropertyType
+- Location
+- Rights
+- Obligations
+- FinancialTerms
 - OtherNotes
 Clause:
 """${clause}"""`;
   return callLLM(prompt);
 }
 
-async function explainCriminalClause(clause: string) {
+async function explainPropertyClause(clause: string) {
   const prompt = `
-Explain the clause simply, and extract punishment details.
+Explain this property/real estate clause in simple language.
 Return JSON:
 - Explanation
-- PunishmentDetails
+- KeyImplication
 Clause:
 """${clause}"""`;
   return callLLM(prompt);
 }
 
-async function extractCaseDetails(clause: string) {
+async function extractPropertyDetails(clause: string) {
   const prompt = `
-Extract details as JSON:
-- Complainant
-- Investigator
-- Court
+Extract property-related details as JSON:
+- Owner
+- Buyer/Seller
+- Tenant/Landlord
+- PropertyType
+- Location
+- FinancialTerms
 - Section
 - Date
-- Punishment
 - OtherNotes
 Clause:
 """${clause}"""`;
@@ -80,7 +84,7 @@ Clause:
 
 async function deduplicateDetails(rawDetails: any) {
   const prompt = `
-Deduplicate overlapping case details. Return JSON list.
+Deduplicate overlapping property document details. Return JSON list.
 Data:
 ${JSON.stringify(rawDetails, null, 2)}`;
   return callLLM(prompt);
@@ -88,7 +92,7 @@ ${JSON.stringify(rawDetails, null, 2)}`;
 
 async function summarizeWithAdvice(json: any) {
   const prompt = `
-Summarize this document in simple language.
+Summarize this property/real estate legal document in simple language.
 Return JSON:
 - summaryText
 - importantPoints[]
@@ -106,7 +110,7 @@ ${JSON.stringify(json, null, 2)}`;
 
 /* ----------------- MAIN PIPELINE ------------------ */
 
-export async function processCriminalCase(input: {
+export async function processPropertyDocs(input: {
   text: string;
   structure: any;
   filename: string;
@@ -122,10 +126,10 @@ export async function processCriminalCase(input: {
   const detailedClauses: any[] = [];
 
   for (const clause of chunks) {
-    const subCategory = await classifyCriminalLevel2(clause);
-    const attributes = await extractCriminalAttributes(clause);
-    const explanation = await explainCriminalClause(clause);
-    const caseDetails = await extractCaseDetails(clause);
+    const subCategory = await classifyPropertyLevel2(clause);
+    const attributes = await extractPropertyAttributes(clause);
+    const explanation = await explainPropertyClause(clause);
+    const details = await extractPropertyDetails(clause);
 
     explainedClauses.push({
       clause,
@@ -134,7 +138,7 @@ export async function processCriminalCase(input: {
       explanation: tryParse(explanation),
     });
 
-    detailedClauses.push({ caseDetails: tryParse(caseDetails) });
+    detailedClauses.push({ details: tryParse(details) });
   }
 
   const cleanedDetailsRaw = await deduplicateDetails(detailedClauses);
@@ -145,7 +149,7 @@ export async function processCriminalCase(input: {
     filename: input.filename,
     structure: input.structure,
     clauses: explainedClauses,
-    caseDetails: cleanedDetails,
+    details: cleanedDetails,
   });
 
   /* ----------------- FINAL DISPLAY-READY JSON ------------------ */
@@ -154,14 +158,14 @@ export async function processCriminalCase(input: {
     filename: input.filename,
     structure: input.structure,
     clauses: explainedClauses,
-    caseDetails: cleanedDetails,
+    details: cleanedDetails,
     summary: summaryText,
     important_points: importantPoints,
 
     // UI-friendly metadata
     file_name: input.filename,
-    title: "Criminal Case Legal Analysis",
-    category: "Criminal Law",
+    title: "Property & Real Estate Document Analysis",
+    category: "Property & Real Estate",
     metadata: {
       processed_at: new Date().toISOString(),
       total_clauses: explainedClauses.length,
@@ -173,39 +177,39 @@ export async function processCriminalCase(input: {
       summaryText,
       importantPoints,
       whatHappensIfYouIgnoreThis:
-        "Ignoring this document could result in missed legal obligations, penalties, or inability to defend your rights.",
+        "Ignoring this document may lead to disputes over ownership, financial liability, or property rights.",
       whatYouShouldDoNow: [
         "Review all extracted clauses carefully.",
-        "Identify obligations and deadlines.",
-        "Seek professional legal consultation.",
-        "Keep this analysis stored securely.",
+        "Verify ownership, obligations, and financial terms.",
+        "Seek professional legal consultation before signing.",
+        "Store property documents securely.",
       ],
       importantNote:
         "⚠️ This summary is AI-generated. Always verify with a licensed legal professional.",
       mainRisksRightsConsequences:
-        "Potential imprisonment, fines, or loss of legal rights under the cited provisions.",
+        "Loss of property rights, financial liability, or involvement in legal disputes.",
     },
 
     // Extra sections
     risks: [
-      "Legal punishments if obligations are not fulfilled",
-      "Financial penalties under certain clauses",
-      "Reputational risks in ongoing litigation",
+      "Disputes over ownership or transfer",
+      "Hidden financial obligations in clauses",
+      "Legal penalties for zoning or land use violations",
     ],
     recommendations: [
-      "Cross-check sections with official criminal law codes.",
-      "Map extracted case details to actual court records.",
-      "Prepare supporting documents for defense.",
+      "Cross-check ownership with official land/property records.",
+      "Confirm financial obligations with banks or lenders.",
+      "Seek legal due diligence before property transfer.",
     ],
 
     // Traceability: prompts used
     used_prompts: {
-      classifyCriminalLevel2: `You are a legal assistant specializing in Criminal Law. Classify ...`,
-      extractCriminalAttributes: `Extract structured attributes in JSON ...`,
-      explainCriminalClause: `Explain the clause simply, and extract punishment details ...`,
-      extractCaseDetails: `Extract details as JSON ...`,
-      deduplicateDetails: `Deduplicate overlapping case details ...`,
-      summarizeWithAdvice: `Summarize this document in simple language ...`,
+      classifyPropertyLevel2: `You are a legal assistant specializing in Property & Real Estate Law. Classify ...`,
+      extractPropertyAttributes: `Extract structured attributes in JSON ...`,
+      explainPropertyClause: `Explain this property/real estate clause in simple language ...`,
+      extractPropertyDetails: `Extract property-related details as JSON ...`,
+      deduplicateDetails: `Deduplicate overlapping property document details ...`,
+      summarizeWithAdvice: `Summarize this property/real estate legal document in simple language ...`,
     },
   };
 }
