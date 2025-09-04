@@ -63,25 +63,28 @@ export async function POST(req: NextRequest) {
         : String(engText);
 
     // 🧠 Run LangGraph pipeline
-    const finalJson = await runLanggraph({
+    const finalJson = (await runLanggraph({
       text: visionPack.engText,
       structure: visionPack.structure,
       filename: visionPack.fileName,
       userId: user.id, // ✅ track ownership
-    });
+    })) as any;
 
     // 📌 Title for sidebar (fallback = filename)
     const title = finalJson.title || path.parse(file.name).name;
 
-    // 💾 Save to Supabase with vector embedding
+    // 💾 Save to Supabase with vector embedding + init chat_history
     const savedDoc = await saveWithEmbedding(supabase, {
-      table: "history", // ✅ use history, not documents
+      table: "documents", // ✅ use history, not documents
       user_id: user.id,
       file_name: finalJson.filename,
       text: finalJson.content,
       structure: finalJson.structure,
       category: finalJson.category,
-      json: finalJson,
+      json: {
+        ...finalJson,
+        chat_history: [], // ✅ ensure empty chat initialized
+      },
       title,
     });
 
@@ -103,6 +106,7 @@ export async function POST(req: NextRequest) {
       summary: finalJson.summary,
       important_points: finalJson.important_points || [],
       clauses: finalJson.clauses || [],
+      chat_history: [], // ✅ return it so frontend initializes
     };
 
     console.log("✅ FINAL JSON:", JSON.stringify(responsePayload, null, 2));

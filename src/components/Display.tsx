@@ -34,6 +34,7 @@ export default function Display({
   const [loadingStep, setLoadingStep] = useState("Analyzing...");
   const [done, setDone] = useState(false);
   const [chatInput, setChatInput] = useState("");
+  const [chatResponse, setChatResponse] = useState("");
 
   // Animate loading
   useEffect(() => {
@@ -65,20 +66,10 @@ export default function Display({
     if (data) setDone(true);
   }, [data]);
 
-  if (loading && !done) {
-    return (
-      <div className="p-6 text-center text-amber-50 bg-slate-950 min-h-screen">
-        <p className="animate-pulse">{loadingStep}</p>
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
   // ✅ Clean summary JSON
-  const summaryObj = cleanJsonString(data.summary);
+  const summaryObj = cleanJsonString(data?.summary);
 
-  const category = data.category || "Uncategorized Document";
+  const category = data?.category || "Uncategorized Document";
   const summaryText = summaryObj?.summaryText || "";
   const importantPoints = summaryObj?.importantPoints || [];
   const whatHappensIfYouIgnoreThis =
@@ -88,11 +79,53 @@ export default function Display({
   const mainRisksRightsConsequences =
     summaryObj?.mainRisksRightsConsequences || "";
 
-  const clausesList = (data.clauses || []).map((clauseObj: any) => ({
+  const clausesList = (data?.clauses || []).map((clauseObj: any) => ({
     ...clauseObj,
     attributes: cleanJsonString(clauseObj.attributes),
     explanation: cleanJsonString(clauseObj.explanation),
   }));
+
+  // ✅ Chat function
+  const sendChat = async () => {
+    if (!chatInput.trim()) return;
+
+    // Build context from analyzed document data
+    const context = `
+Category: ${category}
+Summary: ${summaryText}
+Important Points: ${importantPoints.join(", ")}
+Risks/Consequences: ${mainRisksRightsConsequences}
+What Happens If Ignored: ${whatHappensIfYouIgnoreThis}
+What You Should Do: ${whatYouShouldDoNow.join(", ")}
+Important Note: ${importantNote}
+Full Text: ${data?.content?.slice(0, 2000) || ""}
+`;
+
+    console.log("Sending to chatbot:", { message: chatInput, context });
+
+    const res = await fetch("/api/chatbot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: chatInput, // ✅ required
+        context: context, // ✅ required
+      }),
+    });
+
+    const result = await res.json();
+    console.log("💬 Chatbot Response:", result);
+    setChatResponse(result.reply || "No response");
+  };
+
+  if (loading && !done) {
+    return (
+      <div className="p-6 text-center text-amber-50 bg-slate-950 min-h-screen">
+        <p className="animate-pulse">{loadingStep}</p>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
     <div className="flex flex-col min-h-screen bg-transparent text-amber-50">
@@ -195,6 +228,14 @@ export default function Display({
             <p>{importantNote}</p>
           </section>
         )}
+
+        {/* 💬 Chatbot response */}
+        {chatResponse && (
+          <section className="p-4 bg-amber-100 text-black rounded-lg border border-white/20">
+            <h2 className="text-lg font-semibold mb-2">💬 Chatbot</h2>
+            <p>{chatResponse}</p>
+          </section>
+        )}
       </div>
 
       {/* 💬 Chat input bar */}
@@ -206,17 +247,13 @@ export default function Display({
           onChange={(e) => setChatInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
-              console.log("Send:", chatInput);
-              setChatInput("");
+              sendChat();
             }
           }}
           className="flex-1 border border-white/30 bg-transparent text-amber-50 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
         />
         <button
-          onClick={() => {
-            console.log("Send:", chatInput);
-            setChatInput("");
-          }}
+          onClick={sendChat}
           className="p-2 bg-amber-500 text-black rounded-full hover:bg-amber-400"
         >
           <Send size={18} />

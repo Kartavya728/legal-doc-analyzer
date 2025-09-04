@@ -6,8 +6,6 @@ const llm = new ChatGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY,
   temperature: 0,
 });
-
-/** Safe JSON parse */
 function tryParse(text: string): any {
   try {
     return JSON.parse(text);
@@ -22,7 +20,6 @@ async function callLLM(prompt: string): Promise<string> {
 }
 
 /* ----------------- PROMPTS ------------------ */
-
 async function classifyCriminalLevel2(clause: string) {
   const prompt = `
 You are a legal assistant specializing in Criminal Law.
@@ -37,7 +34,6 @@ Clause:
 Return only the sub-category name.`;
   return callLLM(prompt);
 }
-
 async function extractCriminalAttributes(clause: string) {
   const prompt = `
 Extract structured attributes in JSON:
