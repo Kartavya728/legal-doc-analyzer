@@ -1,7 +1,6 @@
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
-// Import category processors
 import { processCriminalCase } from "./nodes/cat1";
 import { processContracts } from "./nodes/cat2";
 import { processCompliance } from "./nodes/cat3";

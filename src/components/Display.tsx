@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Send } from "lucide-react";
 
-// 🧹 JSON cleaner: removes ```json wrappers & parses safely
+// 🧹 JSON cleaner
 function cleanJsonString(input: any): any {
   if (typeof input === "string") {
     try {
@@ -34,7 +34,14 @@ export default function Display({
   const [loadingStep, setLoadingStep] = useState("Analyzing...");
   const [done, setDone] = useState(false);
   const [chatInput, setChatInput] = useState("");
-  const [chatResponse, setChatResponse] = useState("");
+  const [chatHistory, setChatHistory] = useState<
+    { sender: "user" | "bot"; text: string }[]
+  >([]);
+
+  // 🔄 Reset chat when document changes
+  useEffect(() => {
+    setChatHistory([]);
+  }, [data]);
 
   // Animate loading
   useEffect(() => {
@@ -89,7 +96,9 @@ export default function Display({
   const sendChat = async () => {
     if (!chatInput.trim()) return;
 
-    // Build context from analyzed document data
+    // Add user message to chat history immediately
+    setChatHistory((prev) => [...prev, { sender: "user", text: chatInput }]);
+
     const context = `
 Category: ${category}
 Summary: ${summaryText}
@@ -101,20 +110,31 @@ Important Note: ${importantNote}
 Full Text: ${data?.content?.slice(0, 2000) || ""}
 `;
 
-    console.log("Sending to chatbot:", { message: chatInput, context });
+    const messageToSend = chatInput;
+    setChatInput(""); // clear input
 
-    const res = await fetch("/api/chatbot", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: chatInput, // ✅ required
-        context: context, // ✅ required
-      }),
-    });
+    try {
+      const res = await fetch("/api/chatbot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: messageToSend,
+          context,
+        }),
+      });
 
-    const result = await res.json();
-    console.log("💬 Chatbot Response:", result);
-    setChatResponse(result.reply || "No response");
+      const result = await res.json();
+
+      setChatHistory((prev) => [
+        ...prev,
+        { sender: "bot", text: result.reply || "No response" },
+      ]);
+    } catch (err) {
+      setChatHistory((prev) => [
+        ...prev,
+        { sender: "bot", text: "⚠️ Error: Failed to get response." },
+      ]);
+    }
   };
 
   if (loading && !done) {
@@ -229,13 +249,24 @@ Full Text: ${data?.content?.slice(0, 2000) || ""}
           </section>
         )}
 
-        {/* 💬 Chatbot response */}
-        {chatResponse && (
-          <section className="p-4 bg-amber-100 text-black rounded-lg border border-white/20">
-            <h2 className="text-lg font-semibold mb-2">💬 Chatbot</h2>
-            <p>{chatResponse}</p>
-          </section>
-        )}
+        {/* 💬 Chat Section */}
+        <section className="p-4 bg-black/40 rounded-lg border border-white/20">
+          <h2 className="text-lg font-semibold mb-3">💬 Chat</h2>
+          <div className="flex flex-col gap-3">
+            {chatHistory.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`px-4 py-2 rounded-2xl max-w-[75%] ${
+                  msg.sender === "user"
+                    ? "bg-amber-500 text-black self-end rounded-br-none"
+                    : "bg-gray-700 text-white self-start rounded-bl-none"
+                }`}
+              >
+                {msg.text}
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
 
       {/* 💬 Chat input bar */}
