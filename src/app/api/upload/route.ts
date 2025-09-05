@@ -4,7 +4,6 @@ import fs from "fs";
 import path from "path";
 import { processFile } from "@/lib/utils/file-processing";
 import { translateText } from "@/lib/utils/translate";
-import { buildVisionPack } from "@/lib/pipeline/vision-pipeline";
 import { runLanggraph } from "@/lib/langgraph/main-langgraph";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { saveWithEmbedding } from "@/lib/utils/embeddings";
@@ -12,7 +11,6 @@ import { saveWithEmbedding } from "@/lib/utils/embeddings";
 // ✅ Ensure Node.js runtime (required for fs/path)
 export const runtime = "nodejs";
 
-// 🔐 local factory (NOT exported) to avoid Next.js type check failures
 function getAdminSupabase(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -27,20 +25,17 @@ function getAdminSupabase(): SupabaseClient {
 }
 
 export async function POST(req: NextRequest) {
-  // Create inside handler so nothing is exported
   const supabase = getAdminSupabase();
-
   let filePath: string | null = null;
 
   try {
-    // 🔐 Auth check (expects: Authorization: Bearer <jwt>)
+    // 🔐 Auth check
     const authHeader = req.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const token = authHeader.slice("Bearer ".length).trim();
 
-    // Get user from JWT (server-side with service role is allowed)
     const {
       data: { user },
       error: userError,
@@ -57,7 +52,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    // 📝 Save uploaded file locally
+    // 📝 Save file locally
     const buffer = Buffer.from(await file.arrayBuffer());
     const uploadDir = path.join(process.cwd(), "uploads");
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -78,14 +73,12 @@ export async function POST(req: NextRequest) {
         ? engTextRaw.join(" ")
         : String(engTextRaw ?? "");
 
-    // 🔗 Build VisionPack
-    const visionPack = await buildVisionPack(
-      filePath,
-      ocrResult.file || safeName
-    );
-
-    // attach the normalized English text
-    (visionPack as any).engText = engText;
+    // 🚫 Skip Vision pipeline (temporary speed test)
+    const visionPack = {
+      fileName: ocrResult.file || safeName,
+      structure: [], // empty for now
+      engText,
+    };
 
     // 🧠 Run LangGraph pipeline
     const finalJson = (await runLanggraph({
@@ -94,15 +87,13 @@ export async function POST(req: NextRequest) {
       filename: visionPack.fileName,
     })) as any;
 
-    // 📌 Title for sidebar (fallback = filename w/o extension)
+    // 📌 Title
     const title =
       finalJson.title ||
       path.parse(file.name).name ||
       path.parse(visionPack.fileName || safeName).name;
 
-    // 💾 Save to Supabase with vector embedding + init chat_history
-    // NOTE: Your comment said "use history, not documents" but your code uses "documents".
-    // Keep the table name consistent with your DB schema.
+    // 💾 Save to Supabase
     const savedDoc = await saveWithEmbedding(supabase, {
       user_id: user.id,
       file_name: finalJson.filename,
@@ -111,12 +102,11 @@ export async function POST(req: NextRequest) {
       category: finalJson.category,
       json: {
         ...finalJson,
-        chat_history: [], // initialize chat history
+        chat_history: [],
       },
       title,
     });
 
-    // 📦 Construct detailed response
     const responsePayload = {
       original: ocrResult,
       translated: {
@@ -134,21 +124,15 @@ export async function POST(req: NextRequest) {
       chat_history: [],
     };
 
-    // 🧹 Cleanup local file
     try {
       if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch {
-      // ignore cleanup failures
-    }
+    } catch {}
 
     return NextResponse.json({ result: responsePayload });
   } catch (error: any) {
-    // attempt cleanup on error
     try {
       if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch {
-      // ignore cleanup failures
-    }
+    } catch {}
 
     console.error("❌ Upload error:", error);
     return NextResponse.json(

@@ -5,14 +5,34 @@ import { Storage } from "@google-cloud/storage";
 import fs from "fs";
 import path from "path";
 
-const keyPath = path.join(process.cwd(), "google-vision-key.json");
+// 🔑 Validate required env vars
+if (!process.env.GOOGLE_PROJECT_ID || !process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+  throw new Error("❌ Missing Google Cloud environment variables (GOOGLE_PROJECT_ID, GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY)");
+}
 
-const visionClient = new ImageAnnotatorClient({ keyFilename: keyPath });
-const storageClient = new Storage({ keyFilename: keyPath });
+// ✅ Initialize Google Vision client with env vars
+const visionClient = new ImageAnnotatorClient({
+  projectId: process.env.GOOGLE_PROJECT_ID,
+  credentials: {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+  },
+});
 
+// ✅ Initialize Google Storage client with env vars
+const storageClient = new Storage({
+  projectId: process.env.GOOGLE_PROJECT_ID,
+  credentials: {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+  },
+});
+
+// Buckets
 const GCS_INPUT_BUCKET = process.env.GCS_INPUT_BUCKET || "your-ocr-input-bucket";
 const GCS_OUTPUT_BUCKET = process.env.GCS_OUTPUT_BUCKET || "your-ocr-output-bucket";
 
+// 📤 Upload file to GCS
 async function uploadFileToGCS(localFilePath: string, bucketName: string, destinationFileName: string): Promise<string> {
   const bucket = storageClient.bucket(bucketName);
   await bucket.upload(localFilePath, { destination: destinationFileName, resumable: false });
@@ -20,12 +40,14 @@ async function uploadFileToGCS(localFilePath: string, bucketName: string, destin
   return `gs://${bucketName}/${destinationFileName}`;
 }
 
+// 🗑️ Delete file from GCS
 async function deleteFileFromGCS(bucketName: string, fileName: string): Promise<void> {
   const bucket = storageClient.bucket(bucketName);
   await bucket.file(fileName).delete();
   console.log(`🗑️ Deleted gs://${bucketName}/${fileName}`);
 }
 
+// 📥 Read JSON output from GCS
 async function readJsonFromGCS(bucketName: string, prefix: string): Promise<any[]> {
   console.log(`📥 Fetching JSON results from gs://${bucketName}/${prefix} ...`);
   const [files] = await storageClient.bucket(bucketName).getFiles({ prefix });
@@ -43,6 +65,7 @@ async function readJsonFromGCS(bucketName: string, prefix: string): Promise<any[
   return results;
 }
 
+// 🚀 Main OCR processor
 export async function processFile(filePath: string): Promise<any> {
   const fileName = path.basename(filePath);
   const fileExtension = path.extname(fileName).toLowerCase();
@@ -85,7 +108,7 @@ export async function processFile(filePath: string): Promise<any> {
       ];
 
       console.log("⏳ OCR operation started. Waiting for completion...");
-      const [response] = await operation.promise();
+      await operation.promise();
       console.log("✅ OCR operation completed.");
 
       // Download results

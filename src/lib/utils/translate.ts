@@ -1,25 +1,24 @@
+// lib/utils/translate.ts
 import { TranslationServiceClient } from "@google-cloud/translate";
-import fs from "fs";
-import path from "path";
 
-// Always resolve relative to project root
-const keyPath = path.join(process.cwd(), "google-vision-key.json");
+// 🔑 Validate required env vars
+if (!process.env.GOOGLE_PROJECT_ID || !process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+  throw new Error("❌ Missing Google Cloud environment variables (GOOGLE_PROJECT_ID, GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY)");
+}
 
-// Load projectId directly from the JSON key file
-const keyFile = JSON.parse(fs.readFileSync(keyPath, "utf-8"));
-const projectId = keyFile.project_id;
+const location = "global"; // or "us-central1" if needed
 
-const location = "global"; // or "us-central1" for advanced models
-
+// ✅ Use env vars for credentials
 const client = new TranslationServiceClient({
-  keyFilename: keyPath,
+  projectId: process.env.GOOGLE_PROJECT_ID,
+  credentials: {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+  },
 });
 
 /**
  * Translate text or array of texts into a target language
- * @param textToTranslate Single string or array of strings
- * @param targetLanguageCode Language code (default: "en")
- * @returns Translated string or array of strings
  */
 export async function translateText(
   textToTranslate: string | string[],
@@ -33,7 +32,7 @@ export async function translateText(
   const contents = isArray ? textToTranslate : [textToTranslate];
 
   const request = {
-    parent: `projects/${projectId}/locations/${location}`,
+    parent: `projects/${process.env.GOOGLE_PROJECT_ID}/locations/${location}`,
     contents,
     targetLanguageCode,
   };
@@ -44,7 +43,7 @@ export async function translateText(
 
     return isArray ? translations : translations[0];
   } catch (error: any) {
-    console.error("Error translating text:", error);
+    console.error("❌ Error translating text:", error);
     throw new Error(error.message || "Translation API call failed");
   }
 }
