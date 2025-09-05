@@ -1,14 +1,13 @@
 // src/app/api/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-import { processFile } from "@/lib/utils/file-processing";
+import { processFile, processFileBuffer } from "@/lib/utils/file-processing";
 import { translateText } from "@/lib/utils/translate";
 import { runLanggraph } from "@/lib/langgraph/main-langgraph";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { saveWithEmbedding } from "@/lib/utils/embeddings";
+import path from "path";
 
-// ✅ Ensure Node.js runtime (required for fs/path)
+// ✅ Ensure Node.js runtime (required for buffer handling)
 export const runtime = "nodejs";
 
 function getAdminSupabase(): SupabaseClient {
@@ -26,7 +25,6 @@ function getAdminSupabase(): SupabaseClient {
 
 export async function POST(req: NextRequest) {
   const supabase = getAdminSupabase();
-  let filePath: string | null = null;
 
   try {
     // 🔐 Auth check
@@ -52,17 +50,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    // 📝 Save file locally
+    // 📦 Read file buffer
     const buffer = Buffer.from(await file.arrayBuffer());
-    const uploadDir = path.join(process.cwd(), "uploads");
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
     const safeName = `${Date.now()}-${file.name.replace(/[^\w.-]/g, "_")}`;
-    filePath = path.join(uploadDir, safeName);
-    fs.writeFileSync(filePath, buffer);
+    const ext = path.extname(file.name).toLowerCase();
 
     // 🔍 OCR extraction
-    const ocrResult = await processFile(filePath);
+    let ocrResult;
+    if (ext === ".pdf") {
+      // PDFs → must go through GCS pipeline
+      ocrResult = await processFile(safeName); // safeName used in GCS
+    } else {
+      // Images → use buffer directly
+      ocrResult = await processFileBuffer(buffer, safeName);
+    }
 
     // 🌍 Translate OCR text → English
     const engTextRaw = await translateText(ocrResult.text, "en");
@@ -124,16 +125,8 @@ export async function POST(req: NextRequest) {
       chat_history: [],
     };
 
-    try {
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch {}
-
     return NextResponse.json({ result: responsePayload });
   } catch (error: any) {
-    try {
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch {}
-
     console.error("❌ Upload error:", error);
     return NextResponse.json(
       { error: error?.message || "Unknown error" },

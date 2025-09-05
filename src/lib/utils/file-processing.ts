@@ -6,8 +6,14 @@ import fs from "fs";
 import path from "path";
 
 // 🔑 Validate required env vars
-if (!process.env.GOOGLE_PROJECT_ID || !process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
-  throw new Error("❌ Missing Google Cloud environment variables (GOOGLE_PROJECT_ID, GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY)");
+if (
+  !process.env.GOOGLE_PROJECT_ID ||
+  !process.env.GOOGLE_CLIENT_EMAIL ||
+  !process.env.GOOGLE_PRIVATE_KEY
+) {
+  throw new Error(
+    "❌ Missing Google Cloud environment variables (GOOGLE_PROJECT_ID, GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY)"
+  );
 }
 
 // ✅ Initialize Google Vision client with env vars
@@ -33,7 +39,11 @@ const GCS_INPUT_BUCKET = process.env.GCS_INPUT_BUCKET || "your-ocr-input-bucket"
 const GCS_OUTPUT_BUCKET = process.env.GCS_OUTPUT_BUCKET || "your-ocr-output-bucket";
 
 // 📤 Upload file to GCS
-async function uploadFileToGCS(localFilePath: string, bucketName: string, destinationFileName: string): Promise<string> {
+async function uploadFileToGCS(
+  localFilePath: string,
+  bucketName: string,
+  destinationFileName: string
+): Promise<string> {
   const bucket = storageClient.bucket(bucketName);
   await bucket.upload(localFilePath, { destination: destinationFileName, resumable: false });
   console.log(`✅ Uploaded ${localFilePath} → gs://${bucketName}/${destinationFileName}`);
@@ -65,7 +75,7 @@ async function readJsonFromGCS(bucketName: string, prefix: string): Promise<any[
   return results;
 }
 
-// 🚀 Main OCR processor
+// 🚀 OCR from local file path (used for PDFs or dev env)
 export async function processFile(filePath: string): Promise<any> {
   const fileName = path.basename(filePath);
   const fileExtension = path.extname(fileName).toLowerCase();
@@ -124,7 +134,10 @@ export async function processFile(filePath: string): Promise<any> {
               ocrResultText += `\n\n--- Page ${pageCounter} ---\n${page.fullTextAnnotation.text}`;
               if (page.textAnnotations) {
                 ocrResultWords = ocrResultWords.concat(
-                  page.textAnnotations.slice(1).map((w: any) => w.description ?? "").filter(Boolean)
+                  page.textAnnotations
+                    .slice(1)
+                    .map((w: any) => w.description ?? "")
+                    .filter(Boolean)
                 );
               }
             }
@@ -134,7 +147,6 @@ export async function processFile(filePath: string): Promise<any> {
       }
 
       console.log(`📊 Finished processing ${pageCounter - 1} pages.`);
-
     } else {
       console.log(`🖼️ Starting Image OCR for ${fileName}`);
       const [result] = await visionClient.textDetection(filePath);
@@ -143,7 +155,10 @@ export async function processFile(filePath: string): Promise<any> {
         console.warn(`⚠️ No text detected in ${fileName}`);
       } else {
         ocrResultText = result.textAnnotations[0].description || "";
-        ocrResultWords = result.textAnnotations.slice(1).map(a => a.description).filter((w): w is string => !!w);
+        ocrResultWords = result.textAnnotations
+          .slice(1)
+          .map((a) => a.description)
+          .filter((w): w is string => !!w);
         console.log(`✅ Extracted text from image: ${ocrResultWords.length} words`);
       }
     }
@@ -157,5 +172,32 @@ export async function processFile(filePath: string): Promise<any> {
       const gcsFileName = gcsInputUri.split("/").slice(3).join("/");
       await deleteFileFromGCS(GCS_INPUT_BUCKET, gcsFileName).catch(console.error);
     }
+  }
+}
+
+// 🚀 OCR directly from buffer (serverless safe, no /uploads/)
+export async function processFileBuffer(buffer: Buffer, fileName: string): Promise<any> {
+  let ocrResultText = "";
+  let ocrResultWords: string[] = [];
+
+  try {
+    console.log(`🖼️ Starting Buffer OCR for ${fileName}`);
+    const [result] = await visionClient.textDetection({ image: { content: buffer } });
+
+    if (!result?.textAnnotations?.length) {
+      console.warn(`⚠️ No text detected in buffer for ${fileName}`);
+    } else {
+      ocrResultText = result.textAnnotations[0].description || "";
+      ocrResultWords = result.textAnnotations
+        .slice(1)
+        .map((a) => a.description)
+        .filter((w): w is string => !!w);
+      console.log(`✅ Extracted text from buffer: ${ocrResultWords.length} words`);
+    }
+
+    return { file: fileName, text: ocrResultText.trim(), words: ocrResultWords };
+  } catch (err: any) {
+    console.error("❌ Error processing buffer:", err.message);
+    throw err;
   }
 }
