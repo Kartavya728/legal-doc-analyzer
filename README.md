@@ -24,7 +24,7 @@ An AI-powered legal document analyzer that:
 Frontend        | Next.js 15 + TailwindCSS  
 Backend         | FastAPI + LangChain + LangGraph  
 Database        | Supabase + pgvector  
-AI Models       | OpenAI GPT-4 / Gemini Pro / LLaMA3  
+AI Models       | Goolge OCR / Gemini Pro /CLoud Translation  
 Storage         | Supabase Buckets  
 Deployment      | Vercel  
 
@@ -42,13 +42,7 @@ git clone https://github.com/your-username/legal-doc-analyzer.git
 cd legal-doc-analyzer
 
 # Install dependencies
-cd backend && pip install -r requirements.txt
-cd ../frontend && npm install
+npm install
 
-# Run backend
-cd backend
-uvicorn main:app --reload
-
-# Run frontend
-cd frontend
+# Run psmbdsm
 npm run dev
