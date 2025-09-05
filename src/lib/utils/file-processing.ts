@@ -1,64 +1,45 @@
 // lib/utils/file-processing.ts
-import { ImageAnnotatorClient } from "@google-cloud/vision";
+import { ImageAnnotatorClient, protos } from "@google-cloud/vision";
+import { LROperation } from "google-gax";
 import { Storage } from "@google-cloud/storage";
 import fs from "fs";
 import path from "path";
 
-// Always resolve relative to project root
 const keyPath = path.join(process.cwd(), "google-vision-key.json");
 
-// Initialize Google Cloud clients
-const visionClient = new ImageAnnotatorClient({
-  keyFilename: keyPath,
-});
-const storageClient = new Storage({
-  keyFilename: keyPath,
-});
+const visionClient = new ImageAnnotatorClient({ keyFilename: keyPath });
+const storageClient = new Storage({ keyFilename: keyPath });
 
-// Configuration for GCS buckets
-const GCS_INPUT_BUCKET =
-  process.env.GCS_INPUT_BUCKET || "your-ocr-input-bucket";
-const GCS_OUTPUT_BUCKET =
-  process.env.GCS_OUTPUT_BUCKET || "your-ocr-output-bucket";
+const GCS_INPUT_BUCKET = process.env.GCS_INPUT_BUCKET || "your-ocr-input-bucket";
+const GCS_OUTPUT_BUCKET = process.env.GCS_OUTPUT_BUCKET || "your-ocr-output-bucket";
 
-// Utility to upload a local file to GCS
-async function uploadFileToGCS(
-  localFilePath: string,
-  bucketName: string,
-  destinationFileName: string
-): Promise<string> {
+async function uploadFileToGCS(localFilePath: string, bucketName: string, destinationFileName: string): Promise<string> {
   const bucket = storageClient.bucket(bucketName);
-  await bucket.upload(localFilePath, {
-    destination: destinationFileName,
-    resumable: false,
-  });
-  console.log(`Uploaded ${localFilePath} to gs://${bucketName}/${destinationFileName}`);
+  await bucket.upload(localFilePath, { destination: destinationFileName, resumable: false });
+  console.log(`✅ Uploaded ${localFilePath} → gs://${bucketName}/${destinationFileName}`);
   return `gs://${bucketName}/${destinationFileName}`;
 }
 
-// Utility to delete a file from GCS
-async function deleteFileFromGCS(
-  bucketName: string,
-  fileName: string
-): Promise<void> {
+async function deleteFileFromGCS(bucketName: string, fileName: string): Promise<void> {
   const bucket = storageClient.bucket(bucketName);
   await bucket.file(fileName).delete();
-  console.log(`Deleted gs://${bucketName}/${fileName}`);
+  console.log(`🗑️ Deleted gs://${bucketName}/${fileName}`);
 }
 
-// Utility to read JSON files from GCS (for OCR results)
-async function readJsonFromGCS(
-  bucketName: string,
-  prefix: string
-): Promise<any[]> {
+async function readJsonFromGCS(bucketName: string, prefix: string): Promise<any[]> {
+  console.log(`📥 Fetching JSON results from gs://${bucketName}/${prefix} ...`);
   const [files] = await storageClient.bucket(bucketName).getFiles({ prefix });
   const results: any[] = [];
+
   for (const file of files) {
     if (file.name.endsWith(".json")) {
       const [content] = await file.download();
+      console.log(`   ↳ Downloaded ${file.name}`);
       results.push(JSON.parse(content.toString("utf8")));
     }
   }
+
+  console.log(`📄 Retrieved ${results.length} JSON result files.`);
   return results;
 }
 
@@ -72,61 +53,55 @@ export async function processFile(filePath: string): Promise<any> {
   let ocrResultWords: string[] = [];
 
   try {
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`File not found: ${filePath}`);
-    }
+    if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
     if (isPdf) {
-      // --- PDF Processing Flow (via GCS) ---
-      const gcsDestinationFileName = `input/${fileName}`;
-      gcsInputUri = await uploadFileToGCS(
-        filePath,
-        GCS_INPUT_BUCKET,
-        gcsDestinationFileName
-      );
+      console.log(`🚀 Starting PDF OCR for ${fileName}`);
 
+      // Upload
+      const gcsDestinationFileName = `input/${fileName}`;
+      gcsInputUri = await uploadFileToGCS(filePath, GCS_INPUT_BUCKET, gcsDestinationFileName);
+
+      // Destination
       const gcsOutputPrefix = `output/${fileName}_output/`;
       const gcsOutputUri = `gs://${GCS_OUTPUT_BUCKET}/${gcsOutputPrefix}`;
 
-      const request = {
+      const request: protos.google.cloud.vision.v1.IAsyncBatchAnnotateFilesRequest = {
         requests: [
           {
-            inputConfig: {
-              gcsSource: { uri: gcsInputUri },
-              mimeType: "application/pdf",
-            },
-            features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-            outputConfig: {
-              gcsDestination: { uri: gcsOutputUri },
-              batchSize: 20, // split every 20 pages
-            },
+            inputConfig: { gcsSource: { uri: gcsInputUri }, mimeType: "application/pdf" },
+            features: [{ type: protos.google.cloud.vision.v1.Feature.Type.DOCUMENT_TEXT_DETECTION }],
+            outputConfig: { gcsDestination: { uri: gcsOutputUri }, batchSize: 20 },
           },
         ],
       };
 
-      console.log(`Starting async PDF OCR for ${gcsInputUri}`);
-      const [operation] = await visionClient.asyncBatchAnnotateFiles(request);
-      await operation.promise(); // Wait for completion
-      console.log(`PDF OCR completed for ${gcsInputUri}`);
+      console.log(`📤 Sending async OCR request → ${gcsInputUri}`);
+      const [operation] = (await visionClient.asyncBatchAnnotateFiles(request)) as unknown as [
+        LROperation<
+          protos.google.cloud.vision.v1.IAsyncBatchAnnotateFilesResponse,
+          protos.google.cloud.vision.v1.IOperationMetadata
+        >
+      ];
 
-      // Read results from the output GCS bucket
-      const jsonResults = await readJsonFromGCS(
-        GCS_OUTPUT_BUCKET,
-        gcsOutputPrefix
-      );
+      console.log("⏳ OCR operation started. Waiting for completion...");
+      const [response] = await operation.promise();
+      console.log("✅ OCR operation completed.");
 
-      // Aggregate text and words from all pages
+      // Download results
+      const jsonResults = await readJsonFromGCS(GCS_OUTPUT_BUCKET, gcsOutputPrefix);
+
+      // Aggregate
       let pageCounter = 1;
       for (const res of jsonResults) {
-        if (res.responses && res.responses.length > 0) {
+        if (res.responses) {
           for (const page of res.responses) {
             if (page.fullTextAnnotation) {
+              console.log(`📖 Processing page ${pageCounter}`);
               ocrResultText += `\n\n--- Page ${pageCounter} ---\n${page.fullTextAnnotation.text}`;
               if (page.textAnnotations) {
                 ocrResultWords = ocrResultWords.concat(
-                  page.textAnnotations
-                    .slice(1)
-                    .map((annotation: any) => annotation.description)
+                  page.textAnnotations.slice(1).map((w: any) => w.description ?? "").filter(Boolean)
                 );
               }
             }
@@ -134,44 +109,30 @@ export async function processFile(filePath: string): Promise<any> {
           }
         }
       }
+
+      console.log(`📊 Finished processing ${pageCounter - 1} pages.`);
+
     } else {
-      // --- Image Processing Flow (direct) ---
+      console.log(`🖼️ Starting Image OCR for ${fileName}`);
       const [result] = await visionClient.textDetection(filePath);
 
-      if (!result || !result.textAnnotations || result.textAnnotations.length === 0) {
-        console.warn(`No text annotations returned by Vision API for image: ${fileName}.`);
-        ocrResultText = "";
-        ocrResultWords = [];
+      if (!result?.textAnnotations?.length) {
+        console.warn(`⚠️ No text detected in ${fileName}`);
       } else {
         ocrResultText = result.textAnnotations[0].description || "";
-        ocrResultWords = result.textAnnotations
-          .slice(1)
-          .map((annotation) => annotation.description);
+        ocrResultWords = result.textAnnotations.slice(1).map(a => a.description).filter((w): w is string => !!w);
+        console.log(`✅ Extracted text from image: ${ocrResultWords.length} words`);
       }
     }
 
-    return {
-      file: fileName,
-      text: ocrResultText.trim(),
-      words: ocrResultWords,
-    };
-  } catch (error: any) {
-    console.error("Error processing file:", error.message);
-    throw error;
+    return { file: fileName, text: ocrResultText.trim(), words: ocrResultWords };
+  } catch (err: any) {
+    console.error("❌ Error processing file:", err.message);
+    throw err;
   } finally {
-    // Cleanup: Delete the input file from GCS if it was uploaded
     if (gcsInputUri) {
       const gcsFileName = gcsInputUri.split("/").slice(3).join("/");
       await deleteFileFromGCS(GCS_INPUT_BUCKET, gcsFileName).catch(console.error);
-    }
-    // Also delete the output folder from GCS
-    if (isPdf) {
-      const gcsOutputPrefix = `output/${fileName}_output/`;
-      const [files] = await storageClient
-        .bucket(GCS_OUTPUT_BUCKET)
-        .getFiles({ prefix: gcsOutputPrefix });
-      await Promise.all(files.map((f) => f.delete())).catch(console.error);
-      console.log(`Cleaned up output folder gs://${GCS_OUTPUT_BUCKET}/${gcsOutputPrefix}`);
     }
   }
 }

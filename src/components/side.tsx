@@ -1,6 +1,12 @@
 "use client";
 import { cn } from "@/lib/utils";
-import React, { useState, useEffect, createContext, useContext } from "react";
+import React, {
+  useState,
+  useEffect,
+  createContext,
+  useContext,
+  ReactNode,
+} from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   IconMenu2,
@@ -48,7 +54,7 @@ export const SidebarProvider = ({
   setOpen: setOpenProp,
   animate = true,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   open?: boolean;
   setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   animate?: boolean;
@@ -71,7 +77,7 @@ export const Sidebar = ({
   setOpen,
   animate,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   open?: boolean;
   setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   animate?: boolean;
@@ -83,11 +89,19 @@ export const Sidebar = ({
   );
 };
 
-export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
+export const SidebarBody = ({
+  children,
+  ...props
+}: {
+  children?: ReactNode;
+} & React.ComponentProps<typeof motion.div>) => {
   return (
     <>
-      <DesktopSidebar {...props} />
-      <MobileSidebar {...(props as React.ComponentProps<"div">)} />
+      <DesktopSidebar {...props}>{children}</DesktopSidebar>
+      {/* 👇 Cast to plain div props so MotionStyle never leaks */}
+      <MobileSidebar {...(props as React.ComponentProps<"div">)}>
+        {children}
+      </MobileSidebar>
     </>
   );
 };
@@ -96,7 +110,10 @@ export const DesktopSidebar = ({
   className,
   children,
   ...props
-}: React.ComponentProps<typeof motion.div>) => {
+}: {
+  className?: string;
+  children?: ReactNode;
+} & React.ComponentProps<typeof motion.div>) => {
   const { open, setOpen, animate } = useSidebar();
   return (
     <motion.div
@@ -122,7 +139,10 @@ export const MobileSidebar = ({
   className,
   children,
   ...props
-}: React.ComponentProps<"div">) => {
+}: {
+  className?: string;
+  children?: ReactNode;
+} & React.ComponentProps<"div">) => {
   const { open, setOpen } = useSidebar();
   return (
     <div
@@ -165,6 +185,7 @@ export const MobileSidebar = ({
   );
 };
 
+
 export const SidebarLink = ({
   link,
   className,
@@ -190,7 +211,7 @@ export const SidebarLink = ({
           opacity: animate ? (open ? 1 : 0) : 1,
         }}
         className="text-sm whitespace-pre inline-block !p-0 !m-0 truncate max-w-[200px]"
-        title={link.label} // tooltip on hover
+        title={link.label}
       >
         {link.label}
       </motion.span>
@@ -270,8 +291,8 @@ export const SidebarDemo = ({
         .from("documents")
         .select("id, title, file_name, created_at")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
+        .order("created_at", { ascending: false })
+        .limit(12);
       if (!error && data) {
         setDocuments(data);
       }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Send } from "lucide-react";
 
 // 🧹 JSON cleaner
@@ -37,6 +37,7 @@ export default function Display({
   const [chatHistory, setChatHistory] = useState<
     { sender: "user" | "bot"; text: string }[]
   >([]);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // 🔄 Reset chat when document changes
   useEffect(() => {
@@ -73,6 +74,13 @@ export default function Display({
     if (data) setDone(true);
   }, [data]);
 
+  // ✅ Auto-scroll when chat updates
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatHistory]);
+
   // ✅ Clean summary JSON
   const summaryObj = cleanJsonString(data?.summary);
 
@@ -96,7 +104,7 @@ export default function Display({
   const sendChat = async () => {
     if (!chatInput.trim()) return;
 
-    // Add user message to chat history immediately
+    // Add user message immediately
     setChatHistory((prev) => [...prev, { sender: "user", text: chatInput }]);
 
     const context = `
@@ -149,6 +157,7 @@ Full Text: ${data?.content?.slice(0, 2000) || ""}
 
   return (
     <div className="flex flex-col min-h-screen bg-transparent text-amber-50">
+      {/* Content area */}
       <div className="flex-1 p-6 space-y-6 overflow-y-auto">
         {/* 📂 Category */}
         <section className="p-4 bg-black/40 rounded-lg border border-white/20">
@@ -265,12 +274,14 @@ Full Text: ${data?.content?.slice(0, 2000) || ""}
                 {msg.text}
               </div>
             ))}
+            {/* 👇 Keeps scroll at bottom */}
+            <div ref={messagesEndRef} />
           </div>
         </section>
       </div>
 
       {/* 💬 Chat input bar */}
-      <div className="border-t border-white/20 p-4 bg-black/40 sticky bottom-0 flex items-center gap-2">
+      <div className="border-t border-white/20 p-4 bg-black sticky bottom-0 flex items-center gap-2">
         <input
           type="text"
           placeholder="Ask something about this document..."

@@ -1,19 +1,27 @@
-import path from "path";
-import vision from "@google-cloud/vision";
+// src/lib/gcp.ts
+"use server";
+
+import { ImageAnnotatorClient } from "@google-cloud/vision";
 import { v2 as Translate } from "@google-cloud/translate";
 
+/**
+ * Shape of our Google Cloud clients
+ */
 type GcpClients = {
-  imageClient: vision.ImageAnnotatorClient;
-  translateClient: InstanceType<typeof Translate.Translate>;
+  imageClient: ImageAnnotatorClient;
+  translateClient: InstanceType<typeof Translate.Translate>; // ✅ class type
   projectId: string;
 };
 
+/**
+ * Loads Google Cloud service account credentials from env variables.
+ */
 function loadCredentials(): any {
-  // Prefer base64 env var to avoid newlines issues in env files
   const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_B64;
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 
   let json: string | undefined;
+
   if (b64) {
     json = Buffer.from(b64, "base64").toString("utf8");
   } else if (raw) {
@@ -31,15 +39,19 @@ function loadCredentials(): any {
   }
 }
 
+/**
+ * Initializes and returns Google Cloud clients (Vision + Translate).
+ */
 export const gcp: GcpClients = (() => {
   const creds = loadCredentials();
   const projectId = creds.project_id;
 
-  const imageClient = new vision.ImageAnnotatorClient({
+  const imageClient = new ImageAnnotatorClient({
     projectId,
     credentials: creds,
   });
 
+  // ✅ Use the class inside namespace
   const translateClient = new Translate.Translate({
     projectId,
     credentials: creds,

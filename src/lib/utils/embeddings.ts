@@ -1,5 +1,5 @@
 // lib/utils/embeddings.ts
-import { createClient } from "@supabase/supabase-js";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 
 const API_KEY = process.env.GOOGLE_GENAI_API_KEY!;
@@ -15,16 +15,18 @@ export async function embedText(text: string): Promise<number[]> {
       content: { parts: [{ text }] },
     }),
   });
+
   if (!res.ok) {
     const msg = await res.text();
     throw new Error(`Embedding API error ${res.status}: ${msg}`);
   }
+
   const data = await res.json();
   return data?.embedding?.values || [];
 }
 
 export async function saveWithEmbedding(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,   // ✅ looser typing, fixes build error
   payload: {
     user_id: string;
     file_name: string;
