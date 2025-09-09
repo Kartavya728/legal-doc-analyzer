@@ -159,6 +159,25 @@ def classify_level1(chunk_text):
 # Classify all chunks
 chunk_categories = [classify_level1(c) for c in chunks]
 
+from HybridDocumentDifferenceIdentifier import hybrid_difference_workflow 
+
+
+# Add this function to your workflow_functions.py file
+def compare_documents_workflow(doc1_chunks, doc2_chunks, doc1_category, doc2_category):
+    """
+    Document comparison workflow that integrates with your existing workflow structure.
+    
+    Args:
+        doc1_chunks: Chunks from first document (from your text splitter)
+        doc2_chunks: Chunks from second document (from your text splitter) 
+        doc1_category: Level 1 category of first document
+        doc2_category: Level 1 category of second document
+    
+    Returns:
+        Tuple containing (summary, detailed_results)
+    """
+    return hybrid_difference_workflow(doc1_chunks, doc2_chunks, doc1_category, doc2_category)
+
 # Aggregate most frequent category
 level1_category = Counter(chunk_categories).most_common(1)[0][0]
 print("Level 1 Category:", level1_category)
