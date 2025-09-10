@@ -8,7 +8,7 @@ from corp import corp
 from contracts import contracts
 from govt import govt
 from utils import client
-
+from documentComparison import hybrid_difference_workflow
 
 def property_workflow(chunks, category):
     property_ = property(chunks)
@@ -275,3 +275,7 @@ def govt_workflow(chunks):
 
     summary = govt_.summarize_government_from_json(merged_government)
     return summary, merged_government
+
+
+def compare_documents_workflow(doc1_chunks, doc2_chunks, doc1_category, doc2_category):
+    return hybrid_difference_workflow(doc1_chunks, doc2_chunks, doc1_category, doc2_category)
