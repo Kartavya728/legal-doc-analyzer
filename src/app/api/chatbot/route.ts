@@ -145,6 +145,7 @@ ${message}
 2. Never say "document does not contain this". Use Google if doc is missing info.
 3. Keep answers short: 2–4 sentences by default. Expand only if user asks for detail.
 4. Be clear, simple, and conversational. Add natural emojis where fitting.
+5. Start your response immediately with the most relevant information.
 `;
 
     console.log("📝 [FINAL PROMPT SENT TO GEMINI]:", prompt);
@@ -157,7 +158,12 @@ ${message}
         ? result.content
         : (result.content as any[]).map((c) => c.text || "").join("\n").trim();
 
-    return NextResponse.json({ reply: reply || "No answer generated." });
+    // In a real streaming implementation, we would use a streaming response
+    // For now, we'll return the full response for client-side streaming simulation
+    return NextResponse.json({ 
+      reply: reply || "No answer generated.",
+      streamingEnabled: true // Flag to indicate streaming should be simulated on client
+    });
   } catch (err: any) {
     console.error("❌ Chatbot API error:", err);
     return NextResponse.json(

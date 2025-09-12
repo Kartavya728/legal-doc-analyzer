@@ -1,23 +1,19 @@
-import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+// src/lib/langgraph/main-langgraph.ts
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-
-import { processCriminalCase } from "./nodes/cat1";
-import { processContracts } from "./nodes/cat2";
-import { processCompliance } from "./nodes/cat3";
-import { processGovernance } from "./nodes/cat4";
-import { processPropertyDocs } from "./nodes/cat5";
-import { processGovernment } from "./nodes/cat6";
-import { processPersonalDocs } from "./nodes/cat7";
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+import { searchGoogle } from "../utils/google-search";
+import { generateUIComponent } from "../utils/ui-generator";
 
 const llm = new ChatGoogleGenerativeAI({
   model: "gemini-1.5-flash",
   apiKey: process.env.GOOGLE_GENAI_API_KEY,
   temperature: 0,
+  streaming: true,
 });
 
-const categories = [
+const CATEGORIES = [
   "Contracts & Agreements",
-  "Litigation & Court Documents",
+  "Litigation & Court Documents", 
   "Regulatory & Compliance",
   "Corporate Governance Documents",
   "Property & Real Estate",
@@ -25,91 +21,194 @@ const categories = [
   "Personal Legal Documents",
 ];
 
-/** classify top-level category */
-async function classifyLevel1(chunk: string): Promise<string> {
-  const prompt = `
-Classify this legal document into ONE of:
-${categories.map((c) => "- " + c).join("\n")}
-Text:
-"""${chunk}"""
-Return only category name.`;
-  const result = await llm.invoke(prompt);
-  return (result.content as string).trim();
+interface ProcessingState {
+  text: string;
+  filename: string;
+  userId: string;
+  category?: string;
+  title?: string;
+  summary?: any;
+  clauses?: any[];
+  relatedInfo?: any;
+  uiComponent?: string;
 }
 
-/** generate short title */
-async function generateTitle(text: string, filename: string): Promise<string> {
+// Step 1: Classify document category
+async function classifyDocument(state: ProcessingState): Promise<ProcessingState> {
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 1500,
+    chunkOverlap: 200,
+  });
+  
+  const chunks = await splitter.splitText(state.text);
+  const sampleText = chunks.slice(0, 3).join("\n");
+  
   const prompt = `
-Generate a short, descriptive title (<=8 words) for this legal document.
-Filename: ${filename}
-Text: ${text.slice(0, 800)}
+Analyze this legal document and classify it into ONE of these categories:
+${CATEGORIES.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+Document text:
+"""${sampleText}"""
+
+Return only the category name exactly as listed above.`;
+
+  const result = await llm.invoke(prompt);
+  const category = (result.content as string).trim();
+  
+  return { ...state, category };
+}
+
+// Step 2: Generate title
+async function generateTitle(state: ProcessingState): Promise<ProcessingState> {
+  const prompt = `
+Create a concise, descriptive title (max 8 words) for this legal document:
+
+Category: ${state.category}
+Filename: ${state.filename}
+Content: ${state.text.slice(0, 1000)}
+
 Return only the title.`;
+
   const result = await llm.invoke(prompt);
-  return (result.content as string).trim();
+  const title = (result.content as string).trim().replace(/['"]/g, '');
+  
+  return { ...state, title };
 }
 
-/** Main LangGraph router */
-export async function runLanggraph({
+// Step 3: Extract and analyze content
+async function analyzeContent(state: ProcessingState): Promise<ProcessingState> {
+  const prompt = `
+Analyze this ${state.category} document and provide a structured analysis:
+
+Document: ${state.text}
+
+Return a JSON object with:
+{
+  "summaryText": "Clear, concise summary in 2-3 sentences",
+  "importantPoints": ["key point 1", "key point 2", "key point 3"],
+  "mainRisksRightsConsequences": "What are the main legal implications?",
+  "whatHappensIfYouIgnoreThis": "Consequences of non-compliance or inaction",
+  "whatYouShouldDoNow": ["immediate action 1", "immediate action 2"],
+  "importantNote": "Most critical thing to remember",
+  "keyDates": ["important dates if any"],
+  "parties": ["involved parties if applicable"]
+}`;
+
+  const result = await llm.invoke(prompt);
+  let summary;
+  try {
+    const content = result.content as string;
+    summary = JSON.parse(content.replace(/```json|```/g, '').trim());
+  } catch {
+    summary = { summaryText: "Analysis failed", importantPoints: [] };
+  }
+  
+  return { ...state, summary };
+}
+
+// Step 4: Extract clauses for legal documents
+async function extractClauses(state: ProcessingState): Promise<ProcessingState> {
+  const prompt = `
+Extract important clauses, terms, or sections from this ${state.category}:
+
+${state.text}
+
+Return a JSON array of objects with:
+[
+  {
+    "clause": "Clause title or key phrase",
+    "explanation": {
+      "Explanation": "What this means in simple terms",
+      "PunishmentDetails": "Consequences or penalties if applicable"
+    },
+    "importance": "high|medium|low"
+  }
+]
+
+Limit to 5 most important clauses.`;
+
+  const result = await llm.invoke(prompt);
+  let clauses = [];
+  try {
+    const content = result.content as string;
+    clauses = JSON.parse(content.replace(/```json|```/g, '').trim());
+  } catch {
+    clauses = [];
+  }
+  
+  return { ...state, clauses };
+}
+
+// Step 5: Search for related information
+async function searchRelatedInfo(state: ProcessingState): Promise<ProcessingState> {
+  try {
+    const searchTerms = `${state.category} ${state.title} legal requirements`;
+    const relatedInfo = await searchGoogle(searchTerms);
+    return { ...state, relatedInfo };
+  } catch (error) {
+    console.error('Search failed:', error);
+    return { ...state, relatedInfo: null };
+  }
+}
+
+// Step 6: Generate UI component
+async function generateUI(state: ProcessingState): Promise<ProcessingState> {
+  try {
+    const uiComponent = await generateUIComponent({
+      category: state.category!,
+      title: state.title!,
+      summary: state.summary,
+      clauses: state.clauses,
+      relatedInfo: state.relatedInfo,
+    });
+    return { ...state, uiComponent };
+  } catch (error) {
+    console.error('UI generation failed:', error);
+    return state;
+  }
+}
+
+// Main streaming LangGraph execution
+export async function runLanggraphStream({
   text,
   filename,
-  structure,
+  userId
 }: {
   text: string;
   filename: string;
-  structure: any;
-}) {
-  const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 1000,
-    chunkOverlap: 100,
-  });
-  const chunks = await splitter.splitText(text);
+  userId: string;
+}): Promise<any> {
+  let state: ProcessingState = { text, filename, userId };
 
-  // classify chunks
-  const chunkCategories = await Promise.all(chunks.map(classifyLevel1));
-  const category =
-    chunkCategories.sort(
-      (a, b) =>
-        chunkCategories.filter((v) => v === a).length -
-        chunkCategories.filter((v) => v === b).length
-    ).pop() || null;
-
-  let processed: any = {};
-
-  switch (category) {
-    case "Litigation & Court Documents":
-      processed = await processCriminalCase({ text, filename, structure });
-      break;
-    case "Contracts & Agreements":
-      processed = await processContracts({ text, filename, structure });
-      break;
-    case "Regulatory & Compliance":
-      processed = await processCompliance({ text, filename, structure });
-      break;
-    case "Corporate Governance Documents":
-      processed = await processGovernance({ text, filename, structure });
-      break;
-    case "Property & Real Estate":
-      processed = await processPropertyDocs({ text, filename, structure });
-      break;
-    case "Government & Administrative":
-      processed = await processGovernment({ text, filename, structure });
-      break;
-    case "Personal Legal Documents":
-      processed = await processPersonalDocs({ text, filename, structure });
-      break;
-    default:
-      processed = {};
-  }
-
-  const title = await generateTitle(text, filename);
+  // Execute pipeline steps
+  console.log('🔍 Classifying document...');
+  state = await classifyDocument(state);
+  
+  console.log('📝 Generating title...');
+  state = await generateTitle(state);
+  
+  console.log('🔍 Analyzing content...');
+  state = await analyzeContent(state);
+  
+  console.log('📋 Extracting clauses...');
+  state = await extractClauses(state);
+  
+  console.log('🔍 Searching related info...');
+  state = await searchRelatedInfo(state);
+  
+  console.log('🎨 Generating UI...');
+  state = await generateUI(state);
 
   return {
-    filename,
-    content: text,
-    category,
-    title,
-    metadata: processed,
-    summary: processed?.summary || null,
-    important_points: processed?.important_points || [],
+    filename: state.filename,
+    content: state.text,
+    category: state.category,
+    title: state.title,
+    summary: state.summary,
+    clauses: state.clauses || [],
+    important_points: state.summary?.importantPoints || [],
+    structure: [],
+    relatedInfo: state.relatedInfo,
+    uiComponent: state.uiComponent,
   };
 }

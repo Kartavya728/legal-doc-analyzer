@@ -92,7 +92,7 @@ export default function Page() {
       <SidebarDemo onSelectHistory={handleSelectDocument} />
 
       {/* Main content updates when doc is selected */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto w-full">
         <HomePage user={user} document={selectedDoc} />
       </main>
     </div>
