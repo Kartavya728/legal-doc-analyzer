@@ -1,79 +1,90 @@
-// src/app/api/chatbot/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { NextRequest } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Gemini LLM
-const llm = new ChatGoogleGenerativeAI({
-  model: "gemini-1.5-flash",
-  apiKey: process.env.GOOGLE_GENAI_API_KEY,
-  temperature: 0.5,
-});
+// 🔹 Initialize Gemini LLM
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY || "");
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// --- 1. Small-talk & chit-chat detection ---
+/* -------------------------------------------------
+   1. Small-talk / Chit-chat handler
+------------------------------------------------- */
 function handleSmallTalk(message: string): string | null {
   const msg = message.trim().toLowerCase();
 
   if (["hi", "hii", "hello"].includes(msg)) {
-    return "Hey 👋, how are you doing?";
+    return "Hey 👋, how are you doing? I'm here to help you understand your legal document better!";
   }
   if (msg.includes("thank")) {
-    return "🙏 You're welcome! Always happy to help.";
+    return "🙏 You're very welcome! I'm always happy to help clarify legal documents and answer your questions.";
   }
   if (msg.includes("who are you")) {
-    return "🤖 I’m your AI legal assistant — I explain documents in plain English and fetch fresh info from the web 🌍.";
+    return "🤖 I'm your AI legal assistant! I explain legal documents in plain English and can fetch the latest information from the web.";
   }
   if (msg.includes("bored")) {
-    return "😅 I get it, legal docs can be boring! Want me to share some quirky or unexpected details from this one?";
+    return "😅 I get it—legal docs can be dry! Want me to highlight surprising or important details from your document?";
   }
   if (msg.includes("not asking about document")) {
-    return "No worries 👍, we can just chat casually too! Ask me anything.";
+    return "👍 No worries! I'm happy to chat about anything. What's on your mind?";
   }
+
   return null;
 }
 
-// --- 2. Google Search Helper ---
+/* -------------------------------------------------
+   2. Google Search Helper
+------------------------------------------------- */
 async function googleSearch(query: string): Promise<string> {
   try {
-    const res = await fetch("https://google.serper.dev/search", {
-      method: "POST",
-      headers: {
-        "X-API-KEY": process.env.SERPER_API_KEY!,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ q: query, gl: "in", hl: "en", num: 5 }),
-    });
+    const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
+    const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
+
+    if (!apiKey || !searchEngineId) {
+      return "🔍 Search unavailable (API keys missing).";
+    }
+
+    const url = new URL("https://www.googleapis.com/customsearch/v1");
+    url.searchParams.set("key", apiKey);
+    url.searchParams.set("cx", searchEngineId);
+    url.searchParams.set("q", query);
+    url.searchParams.set("num", "3");
+    url.searchParams.set("safe", "active");
+
+    const res = await fetch(url.toString());
+    if (!res.ok) return "🔍 Couldn’t fetch search results.";
 
     const data = await res.json();
+    if (!data.items || data.items.length === 0) {
+      return "🔍 No relevant results found.";
+    }
 
-    console.log("🔎 [RAW GOOGLE SEARCH DATA]:", JSON.stringify(data, null, 2));
-
-    const formatted = (data?.organic ?? [])
+    return data.items
       .slice(0, 3)
-      .map((r: any) => `- ${r.title}: ${r.snippet} (🔗 ${r.link})`)
-      .join("\n");
-
-    console.log("✅ [FORMATTED GOOGLE RESULTS]:\n", formatted);
-
-    return formatted || "No results found.";
+      .map(
+        (item: any) =>
+          `📌 ${item.title}\n${item.snippet}\n🔗 ${item.link}`
+      )
+      .join("\n\n");
   } catch (err) {
-    console.error("❌ Google search failed:", err);
-    return "⚠️ Google search failed.";
+    console.error("❌ Google Search Error:", err);
+    return "🔍 Search temporarily unavailable.";
   }
 }
 
-// --- 3. Context Parser (handles both object + string) ---
+/* -------------------------------------------------
+   3. Context Parser
+------------------------------------------------- */
 function parseContext(context: any) {
   if (!context) return {};
 
   if (typeof context === "object") {
     return {
-      category: context?.category ?? "",
-      title: context?.title ?? "",
-      summary: context?.summary ?? "",
-      importantPoints: context?.importantPoints ?? [],
-      risks: context?.risks ?? "",
-      note: context?.note ?? "",
-      texts: context?.texts?.slice(0, 3) ?? [],
+      category: context.category ?? "",
+      title: context.title ?? "",
+      summary: context.summary ?? "",
+      importantPoints: context.importantPoints ?? [],
+      risks: context.risks ?? "",
+      note: context.note ?? "",
+      texts: context.texts?.slice(0, 3) ?? [],
     };
   }
 
@@ -81,8 +92,14 @@ function parseContext(context: any) {
     return {
       category: (context.match(/Category:\s*(.*)/)?.[1] ?? "").trim(),
       title: (context.match(/Title:\s*(.*)/)?.[1] ?? "").trim(),
-      summary: (context.match(/Summary:\s*([\s\S]*?)(?:Important Points:|Risks:|$)/)?.[1] ?? "").trim(),
-      importantPoints: (context.match(/Important Points:\s*([\s\S]*?)(?:Risks:|Note:|$)/)?.[1] ?? "")
+      summary: (
+        context.match(
+          /Summary:\s*([\s\S]*?)(?:Important Points:|Risks:|$)/
+        )?.[1] ?? ""
+      ).trim(),
+      importantPoints: (context.match(
+        /Important Points:\s*([\s\S]*?)(?:Risks:|Note:|$)/
+      )?.[1] ?? "")
         .split(/,\s*|\n/)
         .map((p) => p.trim())
         .filter(Boolean),
@@ -94,81 +111,146 @@ function parseContext(context: any) {
   return {};
 }
 
-// --- 4. Main API Handler ---
+/* -------------------------------------------------
+   4. POST Endpoint (Main Handler)
+------------------------------------------------- */
 export async function POST(req: NextRequest) {
   try {
     const { message, context } = await req.json();
 
     if (!message || !context) {
-      return NextResponse.json(
-        { error: "Message and context are required" },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ error: "❌ Message and context are required" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // 🟢 Step 1: Check chit-chat
+    // Step 1: Handle small talk first
     const chitChatReply = handleSmallTalk(message);
     if (chitChatReply) {
-      return NextResponse.json({ reply: chitChatReply });
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          let i = 0;
+          const typeOut = () => {
+            if (i < chitChatReply.length) {
+              controller.enqueue(encoder.encode(chitChatReply[i]));
+              i++;
+              setTimeout(typeOut, 30);
+            } else {
+              controller.close();
+            }
+          };
+          typeOut();
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
     }
 
-    // 🟢 Step 2: Google Search
-    const googleResults = await googleSearch(message);
+    // Step 2: Perform Google Search
+    const searchQuery = `${message} legal document analysis`;
+    const googleResults = await googleSearch(searchQuery);
 
-    // 🟢 Step 3: Parse Context
+    // Step 3: Parse context
     const ctx = parseContext(context);
-    console.log("📘 [CLEANED CONTEXT]:", JSON.stringify(ctx, null, 2));
 
-    // 🟢 Step 4: Build Prompt
+    // Step 4: Build Prompt
     const prompt = `
-You are a friendly AI assistant 🤖 specializing in explaining legal documents.
+You are an expert AI legal assistant 🤖 with deep knowledge of legal documents and procedures.
 
 --- DOCUMENT CONTEXT ---
-Category: ${ctx.category}
-Title: ${ctx.title}
-Summary: ${ctx.summary}
-Important Points: ${ctx.importantPoints.join(", ")}
-Risks: ${ctx.risks}
-Note: ${ctx.note}
+📋 Category: ${ctx.category}
+📑 Title: ${ctx.title}
+📝 Summary: ${ctx.summary}
+🎯 Key Points: ${ctx.importantPoints.join(", ")}
+⚠️ Risks: ${ctx.risks}
+📌 Important Note: ${ctx.note}
 ------------------------
 
---- GOOGLE SEARCH RESULTS ---
+--- CURRENT WEB INFORMATION ---
 ${googleResults}
 ------------------------
 
---- USER MESSAGE ---
-${message}
+--- USER QUESTION ---
+❓ ${message}
 ------------------------
 
---- INSTRUCTIONS ---
-1. Always merge Document Context + Google Results.
-2. Never say "document does not contain this". Use Google if doc is missing info.
-3. Keep answers short: 2–4 sentences by default. Expand only if user asks for detail.
-4. Be clear, simple, and conversational. Add natural emojis where fitting.
-5. Start your response immediately with the most relevant information.
-`;
+--- RESPONSE INSTRUCTIONS ---
+1. 🎯 Start by directly answering the user’s question
+2. 🔄 Blend in context + web info naturally
+3. 📏 Keep it short (2–4 sentences unless asked for detail)
+4. 💬 Conversational tone with light emojis
+5. 📚 Simplify legal terms
+6. 💡 Offer practical next steps if relevant
+    `;
 
-    console.log("📝 [FINAL PROMPT SENT TO GEMINI]:", prompt);
+    // Step 5: Stream Gemini response
+    const result = await model.generateContentStream(prompt);
 
-    // 🟢 Step 5: LLM Call
-    const result = await llm.invoke(prompt);
-
-    const reply =
-      typeof result.content === "string"
-        ? result.content
-        : (result.content as any[]).map((c) => c.text || "").join("\n").trim();
-
-    // In a real streaming implementation, we would use a streaming response
-    // For now, we'll return the full response for client-side streaming simulation
-    return NextResponse.json({ 
-      reply: reply || "No answer generated.",
-      streamingEnabled: true // Flag to indicate streaming should be simulated on client
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of result.stream) {
+            const text = chunk.text();
+            if (text) {
+              for (let i = 0; i < text.length; i++) {
+                controller.enqueue(encoder.encode(text[i]));
+                if (i < text.length - 1) {
+                  await new Promise((r) => setTimeout(r, 20));
+                }
+              }
+            }
+          }
+          controller.close();
+        } catch (err) {
+          console.error("❌ Streaming Error:", err);
+          controller.enqueue(
+            encoder.encode(
+              "\n\n❌ Oops, something went wrong while processing your request."
+            )
+          );
+          controller.close();
+        }
+      },
     });
-  } catch (err: any) {
-    console.error("❌ Chatbot API error:", err);
-    return NextResponse.json(
-      { error: "Chatbot failed", details: err.message },
-      { status: 500 }
-    );
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "Transfer-Encoding": "chunked",
+      },
+    });
+  } catch (err) {
+    console.error("❌ API Error:", err);
+
+    const encoder = new TextEncoder();
+    const errorStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            "❌ I'm having technical issues right now. Please try again later."
+          )
+        );
+        controller.close();
+      },
+    });
+
+    return new Response(errorStream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   }
 }
