@@ -75,6 +75,7 @@ def save_dates_to_json(results, filename="dates.json"):
         json.dump(results, f, indent=4)
     return filename
 
+# json content = {"installed":{"client_id":"xxxx","project_id":"sustained-works-470816-b6","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://link","client_secret":"key","redirect_uris":["http://localhost"]}}
 
 def get_calendar_service():
     """Authenticate and return Google Calendar API service."""
