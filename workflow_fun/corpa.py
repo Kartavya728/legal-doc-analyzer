@@ -1,3 +1,5 @@
+from corp import *
+
 def corp_workflow(chunks):
     corp_ = corp(chunks)
 

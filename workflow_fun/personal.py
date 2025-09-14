@@ -1,3 +1,5 @@
+from pers import *
+
 def personal_workflow(chunks, category, doc_text):
     personal_ = pers(chunks)
     all_clauses = []

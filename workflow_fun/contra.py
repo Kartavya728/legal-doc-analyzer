@@ -1,3 +1,5 @@
+from contracts import *
+
 def contract_workflow(chunks):
     contract_ = contracts(chunks)
     all_clauses = []
