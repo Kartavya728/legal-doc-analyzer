@@ -63,11 +63,20 @@ export async function* streamGemini(prompt: string) {
   }
 }
 
-// Function to generate UI models for related content with enhanced image search
+// Function to generate UI models for related content with online data search
 export async function generateUIModels(content: string, description: string, documentType?: string) {
   try {
     // Add loading state indicator
-    console.log('Generating UI models with image search...');
+    console.log('Generating UI models with online data search...');
+    
+    // Log input data
+    console.log('UI Model Input Data:', {
+      contentLength: content.length,
+      contentPreview: content.substring(0, 100) + '...',
+      description,
+      documentType,
+      enableOnlineSearch: true
+    });
     
     // Call an API to generate UI models based on content and description
     const response = await fetch('/api/generate-ui-models', {
@@ -79,7 +88,7 @@ export async function generateUIModels(content: string, description: string, doc
         content, 
         description,
         documentType, // Add document type for better context
-        enableImageSearch: true // Enable internet image search
+        enableOnlineSearch: true // Enable online data search
       }),
     });
 
@@ -89,6 +98,14 @@ export async function generateUIModels(content: string, description: string, doc
 
     const data = await response.json();
     console.log('Successfully generated UI models with images');
+    
+    // Log output data
+    console.log('UI Model Output Data:', {
+      modelCount: data.models.length,
+      modelTypes: data.models.map((model: any) => model.type),
+      modelTitles: data.models.map((model: any) => model.title)
+    });
+    
     return data.models;
   } catch (error) {
     console.error('Error generating UI models:', error);

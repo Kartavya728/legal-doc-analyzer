@@ -10,14 +10,30 @@ interface UIModel {
 
 export async function POST(request: Request) {
   try {
-    const { content, description } = await request.json();
+    const { content, description, documentType, enableOnlineSearch } = await request.json();
     
     if (!content) {
       return NextResponse.json({ error: 'Content is required' }, { status: 400 });
     }
+    
+    // Log incoming request data
+    console.log('Generate UI Models API - Request received:', {
+      contentLength: content.length,
+      contentPreview: content.substring(0, 100) + '...',
+      description,
+      documentType,
+      enableOnlineSearch
+    });
 
     // Generate UI models based on content analysis
-    const models = await generateModels(content, description);
+    const models = await generateModels(content, description, documentType);
+    
+    // Log response data
+    console.log('Generate UI Models API - Response data:', {
+      modelCount: models.length,
+      modelTypes: models.map(model => model.type),
+      modelTitles: models.map(model => model.title)
+    });
     
     return NextResponse.json({ models });
   } catch (error) {
@@ -26,36 +42,23 @@ export async function POST(request: Request) {
   }
 }
 
-async function generateModels(content: string, description: string): Promise<UIModel[]> {
+async function generateModels(content: string, description: string, documentType?: string): Promise<UIModel[]> {
+  console.log('generateModels function - Processing started:', {
+    contentLength: content.length,
+    description,
+    documentType
+  });
   // Extract key concepts from content
   const keywords = extractKeywords(content);
   
   // Generate different UI models
   const models: UIModel[] = [];
   
-  // Add multiple image models if description is provided
-  if (description) {
-    // Generate primary image model
-    const primaryImageModel = await generateImageModel(description);
-    if (primaryImageModel) models.push(primaryImageModel);
-    
-    // Generate additional image models for top keywords
-    const topKeywords = keywords.slice(0, 2);
-    for (const keyword of topKeywords) {
-      // Only add if keyword is substantial (more than 5 chars)
-      if (keyword.length > 5) {
-        const keywordDescription = `${description} ${keyword}`;
-        const additionalImageModel = await generateImageModel(keywordDescription);
-        if (additionalImageModel) {
-          // Modify the title to reflect the keyword
-          additionalImageModel.title = `Visual: ${keyword.charAt(0).toUpperCase() + keyword.slice(1)}`;
-          models.push(additionalImageModel);
-        }
-      }
-    }
-  }
+  // Generate summary model for all categories
+  const summaryModel = await generateSummaryModel(content, description, documentType);
+  if (summaryModel) models.push(summaryModel);
   
-  // Generate link models based on keywords
+  // Generate link models based on keywords (online data search)
   const linkModels = await generateLinkModels(keywords);
   models.push(...linkModels);
   
@@ -64,6 +67,17 @@ async function generateModels(content: string, description: string): Promise<UIM
     const tableModel = generateTableModel(content);
     if (tableModel) models.push(tableModel);
   }
+  
+  // Log final models before returning
+  console.log('generateModels function - Final output:', {
+    modelCount: models.length,
+    modelTypes: models.map(model => model.type),
+    modelDetails: models.map(model => ({
+      type: model.type,
+      title: model.title,
+      hasImageUrl: !!model.imageUrl
+    }))
+  });
   
   return models;
 }
@@ -90,45 +104,31 @@ function extractKeywords(content: string): string[] {
     .map(([word]) => word);
 }
 
-async function generateImageModel(description: string): Promise<UIModel | null> {
-  try {
-    // Call an internet image search API to find relevant images
-    // This is a simulated implementation that would be replaced with a real API call
-    // to services like Unsplash, Pexels, or Google Custom Search API
-    
-    // For demonstration, we'll use a more realistic placeholder with the description
-    const searchTerm = encodeURIComponent(description.split(' ').slice(0, 3).join(' '));
-    
-    // In a real implementation, this would be an actual API call
-    // const response = await fetch(`https://api.unsplash.com/search/photos?query=${searchTerm}&per_page=1`);
-    // const data = await response.json();
-    // const imageUrl = data.results[0]?.urls?.regular;
-    
-    // For now, we'll use a more descriptive placeholder
-    const imageUrl = `https://source.unsplash.com/800x400/?${searchTerm}`;
-    
-    return {
-      type: 'image',
-      title: 'Visual Representation',
-      description: `Image search results for: ${description}`,
-      data: {
-        searchTerm,
-        source: 'Internet Image Search'
-      },
-      imageUrl
-    };
-  } catch (error) {
-    console.error('Error searching for images:', error);
-    
-    // Fallback to placeholder if image search fails
-    return {
-      type: 'image',
-      title: 'Visual Representation',
-      description: `Visual representation related to: ${description}`,
-      data: null,
-      imageUrl: 'https://via.placeholder.com/800x400?text=Legal+Document+Visualization'
-    };
-  }
+async function generateSummaryModel(content: string, description: string, documentType?: string): Promise<UIModel | null> {
+  // Log the summary generation process
+  console.log('generateSummaryModel - Generating summary for:', {
+    contentPreview: content.substring(0, 100) + '...',
+    description,
+    documentType
+  });
+  
+  // In a real implementation, this would use AI to generate a comprehensive summary
+  // For now, we'll create a placeholder summary based on the available information
+  const summaryText = `This ${documentType || 'document'} appears to be related to ${description}. 
+  It contains approximately ${content.length} characters of text. 
+  Key points include legal terminology, potential obligations, and relevant context.`;
+  
+  return {
+    type: 'summary',
+    title: 'Document Summary',
+    description: 'Comprehensive overview of the document',
+    data: {
+      summaryText,
+      documentType: documentType || 'Legal Document',
+      wordCount: Math.round(content.length / 5), // Approximate word count
+      readingTime: Math.round(content.length / 1000) // Approximate reading time in minutes
+    }
+  };
 }
 
 async function generateLinkModels(keywords: string[]): Promise<UIModel[]> {

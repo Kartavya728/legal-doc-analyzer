@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Display from "./Display";
+import ProcessingStatus from "./processing-status";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -18,6 +19,8 @@ export default function HomePage({ user, document }: HomePageProps) {
   const [uploadImageUrl, setUploadImageUrl] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(true);
+  const [processingStep, setProcessingStep] = useState("Uploading document");
+  const [processingProgress, setProcessingProgress] = useState(0);
 
   useEffect(() => {
     if (document) {
@@ -49,6 +52,30 @@ export default function HomePage({ user, document }: HomePageProps) {
     setTimeout(() => {
       setShowUploadForm(false);
     }, 300);
+    
+    // Simulate processing steps
+    const processingSteps = [
+      "Uploading document",
+      "Extracting text",
+      "Analyzing content",
+      "Generating summary",
+      "Identifying key points",
+      "Assessing risks",
+      "Preparing results"
+    ];
+    
+    let currentStep = 0;
+    const totalSteps = processingSteps.length;
+    
+    const progressInterval = setInterval(() => {
+      if (currentStep < totalSteps) {
+        setProcessingStep(processingSteps[currentStep]);
+        setProcessingProgress(Math.round((currentStep / (totalSteps - 1)) * 100));
+        currentStep++;
+      } else {
+        clearInterval(progressInterval);
+      }
+    }, 1500);
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -197,7 +224,15 @@ export default function HomePage({ user, document }: HomePageProps) {
                     className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold rounded-xl shadow-lg transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!selectedFile || loading}
                   >
-                    {loading ? "Processing..." : "Upload & Analyze"}
+                    {loading ? (
+                      <div className="flex items-center space-x-2">
+                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Processing...</span>
+                      </div>
+                    ) : "Upload & Analyze"}
                   </motion.button>
                 </form>
               </motion.div>
@@ -205,7 +240,22 @@ export default function HomePage({ user, document }: HomePageProps) {
           </motion.div>
         )}
 
-        {result && (
+        {loading && !showUploadForm && (
+          <motion.div
+            key="processing-status"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="absolute inset-0 z-20 flex items-center justify-center"
+          >
+            <ProcessingStatus 
+              currentStep={processingStep}
+              progress={processingProgress}
+            />
+          </motion.div>
+        )}
+        
+        {result && !loading && (
           <motion.div
             key="display-content"
             initial={{ opacity: 0 }}

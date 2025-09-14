@@ -202,23 +202,51 @@ ${googleResults}
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          // Add a heartbeat to keep the connection alive
+          const heartbeatInterval = setInterval(() => {
+            // Send a space character that will be invisible but keeps connection alive
+            controller.enqueue(encoder.encode(' '));
+          }, 15000); // Every 15 seconds
+          
+          // Buffer to accumulate text for smoother streaming
+          let buffer = '';
+          const flushBuffer = async () => {
+            if (buffer.length > 0) {
+              for (let i = 0; i < buffer.length; i++) {
+                controller.enqueue(encoder.encode(buffer[i]));
+                // Smaller delay for smoother experience
+                if (i < buffer.length - 1 && i % 3 === 0) {
+                  await new Promise((r) => setTimeout(r, 10));
+                }
+              }
+              buffer = '';
+            }
+          };
+          
+          // Process the stream
           for await (const chunk of result.stream) {
             const text = chunk.text();
             if (text) {
-              for (let i = 0; i < text.length; i++) {
-                controller.enqueue(encoder.encode(text[i]));
-                if (i < text.length - 1) {
-                  await new Promise((r) => setTimeout(r, 20));
-                }
+              buffer += text;
+              
+              // Flush buffer when it reaches certain size or contains sentence endings
+              if (buffer.length > 20 || /[.!?\n]\s*$/.test(buffer)) {
+                await flushBuffer();
               }
             }
           }
+          
+          // Flush any remaining text
+          await flushBuffer();
+          
+          // Clean up
+          clearInterval(heartbeatInterval);
           controller.close();
         } catch (err) {
           console.error("❌ Streaming Error:", err);
           controller.enqueue(
             encoder.encode(
-              "\n\n❌ Oops, something went wrong while processing your request."
+              "\n\n❌ Oops, something went wrong while processing your request. Please try again."
             )
           );
           controller.close();
@@ -237,14 +265,33 @@ ${googleResults}
   } catch (err) {
     console.error("❌ API Error:", err);
 
+    // Determine the specific error type for better user feedback
+    let errorMessage = "❌ I'm having technical issues right now. Please try again later.";
+    
+    if (err instanceof Error) {
+      // Handle specific error types
+      if (err.message.includes("API key") || err.message.includes("authentication")) {
+        errorMessage = "❌ Authentication error with the AI service. Please contact support.";
+      } else if (err.message.includes("timeout") || err.message.includes("ETIMEDOUT")) {
+        errorMessage = "❌ The request timed out. Please try again with a simpler question.";
+      } else if (err.message.includes("rate limit") || err.message.includes("quota")) {
+        errorMessage = "❌ Service is currently experiencing high demand. Please try again in a few minutes.";
+      } else if (err.message.includes("content policy") || err.message.includes("blocked")) {
+        errorMessage = "❌ Your request couldn't be processed due to content restrictions.";
+      }
+      
+      // Log detailed error for debugging
+      console.error("Detailed error:", {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      });
+    }
+
     const encoder = new TextEncoder();
     const errorStream = new ReadableStream({
       start(controller) {
-        controller.enqueue(
-          encoder.encode(
-            "❌ I'm having technical issues right now. Please try again later."
-          )
-        );
+        controller.enqueue(encoder.encode(errorMessage));
         controller.close();
       },
     });
@@ -255,6 +302,7 @@ ${googleResults}
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
       },
+      status: 500
     });
   }
 }

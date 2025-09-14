@@ -12,6 +12,22 @@ const nextConfig = {
     // !! WARN !!
     ignoreBuildErrors: true,
   },
+  output: 'standalone', // Optimizes for production deployment
+  images: {
+    domains: ['tse2.mm.bing.net'], // Allow images from Bing
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
+  },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
+  serverExternalPackages: ['pdf-parse', 'pdfjs-dist'],
 };
 
 module.exports = nextConfig;
