@@ -1,4 +1,4 @@
-from govt import *
+from classes.govt import *
 
 
 def govt_workflow(chunks):

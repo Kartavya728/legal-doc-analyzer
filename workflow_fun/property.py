@@ -1,4 +1,4 @@
-from property_real import property
+from classes.property_real import property
 import pandas as pd
 
 def property_workflow(chunks, category):

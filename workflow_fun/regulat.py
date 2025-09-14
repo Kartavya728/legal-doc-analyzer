@@ -1,4 +1,4 @@
-from regulation_comp import regulatory
+from classes.regulation_comp import regulatory
 import pandas as pd
 
 def regulatory_workflow(chunks, category):

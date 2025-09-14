@@ -1,4 +1,4 @@
-from contracts import *
+from classes.contracts import *
 
 def contract_workflow(chunks):
     contract_ = contracts(chunks)

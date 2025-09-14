@@ -1,4 +1,4 @@
-from litigation import litigation
+from classes.litigation import litigation
 
 def litigation_workflow(chunks):
     litigation_ = litigation(chunks)

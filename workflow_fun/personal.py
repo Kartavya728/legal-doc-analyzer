@@ -1,4 +1,4 @@
-from pers import *
+from classes.pers import *
 
 def personal_workflow(chunks, category, doc_text):
     personal_ = pers(chunks)
