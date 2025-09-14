@@ -21,6 +21,7 @@ export default function HomePage({ user, document }: HomePageProps) {
 
   useEffect(() => {
     if (document) {
+      console.log("Document data received:", document);
       setResult(document);
       setShowUploadForm(false);
     }

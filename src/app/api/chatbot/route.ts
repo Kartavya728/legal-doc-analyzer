@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { answerDocumentQuestion } from "@/lib/langgraph";
 
 // 🔹 Initialize Gemini LLM
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY || "");
@@ -50,7 +51,7 @@ async function googleSearch(query: string): Promise<string> {
     url.searchParams.set("safe", "active");
 
     const res = await fetch(url.toString());
-    if (!res.ok) return "🔍 Couldn’t fetch search results.";
+    if (!res.ok) return "🔍 Couldn't fetch search results.";
 
     const data = await res.json();
     if (!data.items || data.items.length === 0) {
@@ -79,18 +80,20 @@ function parseContext(context: any) {
   if (typeof context === "object") {
     return {
       category: context.category ?? "",
+      documentType: context.documentType ?? "",
       title: context.title ?? "",
       summary: context.summary ?? "",
       importantPoints: context.importantPoints ?? [],
       risks: context.risks ?? "",
       note: context.note ?? "",
-      texts: context.texts?.slice(0, 3) ?? [],
+      content: context.content ?? "",
     };
   }
 
   if (typeof context === "string") {
     return {
       category: (context.match(/Category:\s*(.*)/)?.[1] ?? "").trim(),
+      documentType: (context.match(/Document Type:\s*(.*)/)?.[1] ?? "").trim(),
       title: (context.match(/Title:\s*(.*)/)?.[1] ?? "").trim(),
       summary: (
         context.match(
@@ -105,6 +108,7 @@ function parseContext(context: any) {
         .filter(Boolean),
       risks: (context.match(/Risks:\s*([\s\S]*?)(?:Note:|$)/)?.[1] ?? "").trim(),
       note: (context.match(/Note:\s*([\s\S]*)$/)?.[1] ?? "").trim(),
+      content: context,
     };
   }
 
@@ -116,11 +120,11 @@ function parseContext(context: any) {
 ------------------------------------------------- */
 export async function POST(req: NextRequest) {
   try {
-    const { message, context } = await req.json();
+    const { message, context, documentType, category } = await req.json();
 
-    if (!message || !context) {
+    if (!message) {
       return new Response(
-        JSON.stringify({ error: "❌ Message and context are required" }),
+        JSON.stringify({ error: "❌ Message is required" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -155,7 +159,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 2: Perform Google Search
-    const searchQuery = `${message} legal document analysis`;
+    const searchQuery = `${message} ${documentType || "legal document"} ${category || ""} analysis`;
     const googleResults = await googleSearch(searchQuery);
 
     // Step 3: Parse context
@@ -167,7 +171,7 @@ You are an expert AI legal assistant 🤖 with deep knowledge of legal documents
 
 --- DOCUMENT CONTEXT ---
 📋 Category: ${ctx.category}
-📑 Title: ${ctx.title}
+📑 Document Type: ${ctx.documentType}
 📝 Summary: ${ctx.summary}
 🎯 Key Points: ${ctx.importantPoints.join(", ")}
 ⚠️ Risks: ${ctx.risks}
@@ -183,7 +187,7 @@ ${googleResults}
 ------------------------
 
 --- RESPONSE INSTRUCTIONS ---
-1. 🎯 Start by directly answering the user’s question
+1. 🎯 Start by directly answering the user's question
 2. 🔄 Blend in context + web info naturally
 3. 📏 Keep it short (2–4 sentences unless asked for detail)
 4. 💬 Conversational tone with light emojis
