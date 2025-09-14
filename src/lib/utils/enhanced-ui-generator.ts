@@ -32,13 +32,16 @@ interface UIElement {
 }
 
 // Enhanced image search for legal content
+// Enhanced image search for legal content
 async function searchLegalImages(query: string, count: number = 3): Promise<ImageSearchResult[]> {
   try {
     const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
     const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
-    
+
     if (!apiKey || !searchEngineId) {
-      return getFallbackImages(query, count);
+      // ❌ Instead of falling back to Unsplash, just return an empty array
+      console.warn("⚠️ No Google Search credentials found. Skipping image search.");
+      return [];
     }
 
     const url = new URL('https://www.googleapis.com/customsearch/v1');
@@ -51,13 +54,14 @@ async function searchLegalImages(query: string, count: number = 3): Promise<Imag
     url.searchParams.set('rights', 'cc_publicdomain,cc_attribute,cc_sharealike');
 
     const response = await fetch(url.toString());
-    
+
     if (!response.ok) {
-      return getFallbackImages(query, count);
+      console.error("❌ Google Image API request failed:", response.statusText);
+      return [];
     }
 
     const data = await response.json();
-    
+
     return (data.items || []).slice(0, count).map((item: any) => ({
       url: item.link,
       title: item.title || 'Legal Illustration',
@@ -65,10 +69,11 @@ async function searchLegalImages(query: string, count: number = 3): Promise<Imag
       source: item.displayLink || 'Internet'
     }));
   } catch (error) {
-    console.error('Image search failed:', error);
-    return getFallbackImages(query, count);
+    console.error('❌ Image search failed:', error);
+    return [];
   }
 }
+
 
 // Fallback to Unsplash for high-quality images
 // Fallback to Unsplash for high-quality images (async, resolves redirects)
@@ -82,7 +87,7 @@ async function getFallbackImages(query: string, count: number): Promise<ImageSea
     });
 
     results.push({
-      url: res.url, // ✅ resolved final Unsplash URL
+      url: res.url,
       title: `${query} Visualization`,
       description: `Professional image illustrating ${query}`,
       source: "Unsplash"

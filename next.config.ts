@@ -1,17 +1,11 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'source.unsplash.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'via.placeholder.com',
-      },
-    ],
+    // 👇 Use a custom loader so ANY URL is allowed
+    loader: "custom",
+    loaderFile: "./src/lib/imageLoader.ts",
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;

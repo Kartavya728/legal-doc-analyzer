@@ -79,7 +79,7 @@ const InternetImageCard = ({ query, title, description }: { query: string, title
     const fetchImage = async () => {
       try {
         const searchTerm = encodeURIComponent(query.slice(0, 50));
-        const url = `https://source.unsplash.com/800x400/?${searchTerm}`;
+        const url = `https://tse2.mm.bing.net/th/id/OIP.7cRYFyLoDEDh4sRtM73vvwHaDg?pid=Api&P=0&h=180`;
         setImageUrl(url);
 
         // ✅ Print image URL
