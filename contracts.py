@@ -1,4 +1,4 @@
-from utils import call_gemini, client
+from utils import *
 import json
 import re
 
@@ -23,7 +23,7 @@ class contracts:
         Document Text:
         {chunk_text}
         """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
 
 
     def classify_contract_level2(self,clause_text):
@@ -50,11 +50,7 @@ class contracts:
 
         Return only the sub-category name.
         """
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
 
 
 
@@ -83,11 +79,8 @@ class contracts:
         Clause:
         \"\"\"{clause_text}\"\"\"
         """
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
+
 
 
 
@@ -115,11 +108,7 @@ class contracts:
         - Explanation
         - PracticalEffect
         """
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
     
 
     def makenice(self, clause_text):
@@ -129,11 +118,6 @@ class contracts:
         We would give you a json file and make it display nice and which cell are duplicated make it as one and remove all null columns and the key name which are repeated merge them in a list display it nicely 
         {clause_text}
         """
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
-
+        return call_gemini1(prompt)
 
     

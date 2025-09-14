@@ -1,4 +1,12 @@
-from workflow_functions import *
+
+from workflow_fun.contra import *
+from workflow_fun.corpa import *
+from workflow_fun.doc_comp import *
+from workflow_fun.govt1 import *
+from workflow_fun.lit import *
+from workflow_fun.personal import *
+from workflow_fun.property import *
+from workflow_fun.regulat import *
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from utils import *
 
@@ -180,7 +188,7 @@ elif(level1_category == "Personal Legal Documents"):
 
 elif (level1_category =="Litigation & Court Documents"):
     document_summary,json_f = litigation_workflow(chunks)
-    print(document_summary)
+    
     
 elif (level1_category =="Corporate Governance Documents"):
     document_summary,json_f = corp_workflow(chunks)
@@ -190,17 +198,5 @@ elif (level1_category =="Contracts & Agreements"):
 
 elif (level1_category =="Government & Administrative"):
     document_summary,json_f =govt_workflow(chunks)
-
-
-    
-
-
-
-
-
-
-
-    
-
 
 

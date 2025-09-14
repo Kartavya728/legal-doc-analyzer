@@ -1,4 +1,4 @@
-from utils import call_gemini, client
+from utils import *
 import json
 import re
 
@@ -28,7 +28,7 @@ class corp:
         Document Text:
         \"\"\"{chunk_text}\"\"\"
         """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
 
 
     def classify_corporate_document(self,doc_text):
@@ -59,7 +59,7 @@ class corp:
         Document:
         \"\"\"{doc_text}\"\"\"
         """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
 
 
     def extract_corporate_attributes(self,clause_text, predicted_doc_type=None):
@@ -99,7 +99,7 @@ class corp:
         Clause:
         \"\"\"{clause_text}\"\"\"
         """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
     
 
     def merge_corporate_clauses_with_llm(self,corporate_clauses, predicted_doc_type=None):
@@ -138,7 +138,7 @@ class corp:
 
         Return ONLY the final merged JSON.
         """
-        merged = call_gemini(prompt)
+        merged = call_gemini1(prompt)
         try:
             return json.loads(merged)
         except Exception:
@@ -164,7 +164,7 @@ class corp:
         \"\"\"{clause_text}\"\"\"
         Return ONLY the JSON.
         """
-        result = call_gemini(prompt)
+        result = call_gemini1(prompt)
 
         # Ensure it always returns JSON (avoids plain text leakage from LLM)
         try:
@@ -222,9 +222,4 @@ class corp:
         ```json
         {json.dumps(extracted_json, indent=2)}
         """
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-
-        return response.text.strip()
+        return call_gemini1(prompt)

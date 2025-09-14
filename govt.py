@@ -1,4 +1,4 @@
-from utils import call_gemini, client
+from utils import *
 import json
 import re
 
@@ -32,7 +32,7 @@ class govt:
         Document Text:
         \"\"\"{chunk_text}\"\"\"
         """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
 
 
     def classify_government_document(self,doc_text):
@@ -64,7 +64,7 @@ class govt:
         Document:
         \"\"\"{doc_text}\"\"\"
         """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
 
 
     def extract_government_attributes(self, clause_text, predicted_doc_type=None):
@@ -104,7 +104,7 @@ class govt:
         Clause:
         \"\"\"{clause_text}\"\"\"
         """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
 
 
     def merge_government_clauses_with_llm(self, government_clauses, predicted_doc_type=None):
@@ -145,7 +145,7 @@ class govt:
 
         Return ONLY the final merged JSON.
         """
-        merged = call_gemini(prompt)
+        merged = call_gemini1(prompt)
         try:
             return json.loads(merged)
         except Exception:
@@ -172,7 +172,7 @@ class govt:
 
         Return ONLY the JSON.
         """
-        result = call_gemini(prompt)
+        result = call_gemini1(prompt)
         try:
             return json.loads(result)
         except Exception:
@@ -231,16 +231,6 @@ class govt:
         JSON:
         {json.dumps(extracted_json, indent=2)}
         """
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-
-        try:
-            return response.text.strip()
-        except AttributeError:
-            if hasattr(response, "candidates"):
-                return response.candidates[0].content.parts[0].text.strip()
-            return str(response)
+        return call_gemini1(prompt)
         
      

@@ -1,5 +1,5 @@
-import pandas as pd
-from utils import call_gemini, client
+
+from utils import *
 
 class regulatory:
 
@@ -23,7 +23,7 @@ class regulatory:
     Document Text:
     {joined_text}
     """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
     
 
 
@@ -60,11 +60,7 @@ class regulatory:
         \"\"\"{clause_text}\"\"\"
             """
 
-        response = client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=prompt
-                )
-        return response.text.strip()
+        return call_gemini1(prompt)
     
 
 
@@ -101,11 +97,7 @@ class regulatory:
             {regulatory_attributes}
             """
 
-        response = client.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=prompt
-            )
-        return response.text.strip()
+        return call_gemini1(prompt)
         
 
     def explain_regulatory_document_plain_language(self,regulatory_attributes):
@@ -137,11 +129,7 @@ class regulatory:
     {regulatory_attributes}
     """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
 
 
 

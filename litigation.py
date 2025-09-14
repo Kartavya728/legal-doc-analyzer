@@ -1,6 +1,6 @@
 import pandas as pd
 from collections import defaultdict
-from utils import call_gemini, client
+from utils import *
 
 class litigation:
 
@@ -21,7 +21,7 @@ class litigation:
 
         Document Text:{chunk_text}
         """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
     
 
 
@@ -46,11 +46,7 @@ class litigation:
         Return only the sub-category name.
         """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
 
 
     def extract_criminal_attributes(self,clause_text):
@@ -73,11 +69,7 @@ class litigation:
         \"\"\"{clause_text}\"\"\"
         """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
     
 
     def explain_criminal_clause(self,clause_text):
@@ -98,11 +90,7 @@ class litigation:
     - PunishmentDetails
     """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
 
 
 
@@ -123,11 +111,7 @@ class litigation:
         Clause:
         \"\"\"{clause_text}\"\"\"
         """
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
 
 
 
@@ -149,11 +133,7 @@ class litigation:
         list
         """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
     
 
 
@@ -190,8 +170,4 @@ class litigation:
         Avoid jargon. Be clear, short, and supportive.
         """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)

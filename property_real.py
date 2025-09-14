@@ -1,5 +1,5 @@
-import pandas as pd
-from utils import call_gemini, client
+
+from utils import *
 
 class property:
 
@@ -23,7 +23,7 @@ class property:
     Document Text:
     {joined_text}
     """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
     
 
 
@@ -50,11 +50,7 @@ class property:
         \"\"\"{clause_text}\"\"\"
         """
 
-        response = client.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=prompt
-            )
-        return response.text.strip()
+        return call_gemini1(prompt)
     
 
 
@@ -91,11 +87,7 @@ class property:
     {property_attributes}
     """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
     
 
     def generate_summary_and_comments(self,json_data):
@@ -116,6 +108,6 @@ class property:
     - FairnessComment
     - ValidityComment
     """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
 
 

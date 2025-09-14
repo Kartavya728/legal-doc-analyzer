@@ -1,6 +1,6 @@
 import pandas as pd
 import json
-from utils import call_gemini, client
+from utils import *
 
 class pers:
 
@@ -27,7 +27,7 @@ class pers:
         Document Text:
         {chunk_text}
         """
-        return call_gemini(prompt)
+        return call_gemini1(prompt)
     
 
 
@@ -67,11 +67,7 @@ class pers:
         - "Confidence" (High, Medium, Low)
         """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt + f"\n\nDocument:\n\"\"\"{full_doc_text}\"\"\""
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
 
 
 
@@ -97,11 +93,7 @@ class pers:
         Return only the sub-category name.
         """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
     
 
     def extract_personal_attributes(self,clause_text, predicted_doc_type=None):
@@ -145,11 +137,7 @@ class pers:
     """
 
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
 
 
     def explain_personal_clause(self,clause_text):
@@ -170,11 +158,7 @@ class pers:
         - Significance
         """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_gemini1(prompt)
 
 
     def merge_personal_attributes_lm(self,clause_attributes_list):
@@ -213,16 +197,7 @@ class pers:
     If there are more key-value pairs except the above mentioned categories, create new categories with their name.
     """
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        
-        # Parse back into Python dict
-        try:
-            return json.loads(response.text.strip())
-        except:
-            return response.text.strip()
+        return call_gemini1(prompt)
     
     def generate_summary_from_json(self,extracted_json):
         """
@@ -243,12 +218,7 @@ class pers:
     ```json
     {json.dumps(extracted_json, indent=2)}
     """
-        response = client.models.generate_content(
-        model="gemini-1.5-flash",
-        contents=prompt
-    )
-
-        return response.text.strip()
+        return call_gemini1(prompt)
 
 
         
