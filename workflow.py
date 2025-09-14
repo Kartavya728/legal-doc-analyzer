@@ -7,6 +7,7 @@ from workflow_fun.lit import *
 from workflow_fun.personal import *
 from workflow_fun.property import *
 from workflow_fun.regulat import *
+from calendar_.calender import *
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from utils import *
 
@@ -18,77 +19,78 @@ doc_text ="""
 STATE OF MAHARASHTRA
 IN THE COURT OF THE CHIEF JUDICIAL MAGISTRATE, MUMBAI
 
-Case No.: 1023/2024
-Date: 01/08/2024
+Case No.: 2056/2025
+Date: 14/09/2025
 
-The State vs. Rahul Sharma
-
-Charge Sheet / FIR
+The State vs. Amit Mehra
 
 Complainant / Informant:
-Name: Priya Verma
-Address: 12, MG Road, Mumbai, Maharashtra
-Contact: 9876543210
+Name: Sunita Joshi
+Address: 24, Carter Road, Bandra, Mumbai
+Contact: 9876504321
 
 Accused:
-Name: Rahul Sharma
-Address: 45, Nehru Nagar, Mumbai, Maharashtra
-Age: 28
+Name: Amit Mehra
+Address: 78, Shivaji Nagar, Mumbai
+Age: 35
 Gender: Male
 
-Police Station: Andheri Police Station, Mumbai
-FIR No.: 2456/2024
-Date & Time of Occurrence: 28/07/2024, 10:30 AM
-Place of Occurrence: Shop No. 7, Linking Road, Mumbai
+Police Station: Dadar Police Station, Mumbai
+FIR No.: 3012/2025
+Date & Time of Occurrence: 10/09/2025, 11:15 AM
+Place of Occurrence: Shop No. 14, Hill Road, Bandra
 
 Sections of Law Invoked:
-- Section 420 IPC – Cheating and dishonestly inducing delivery of property
-- Section 406 IPC – Criminal breach of trust
-- Section 34 IPC – Acts done by several persons in furtherance of common intention
+
+Section 420 IPC – Cheating and dishonestly inducing delivery of property
+
+Section 468 IPC – Forgery for purpose of cheating
+
+Section 34 IPC – Acts done by several persons in furtherance of common intention
 
 Facts of the Case
-On 28th July 2024, at approximately 10:30 AM, the accused, Rahul Sharma, approached the complainant, Priya Verma, claiming to be a representative of a reputed electronics company. The accused offered a scheme to deliver electronic goods at a discounted rate if an advance payment was made. The complainant, believing the accused’s representation, transferred Rs. 50,000 to the accused’s bank account.
 
-The accused failed to deliver the goods and avoided all communication thereafter. Witnesses present at the shop, including Mr. Anil Kapoor and Ms. Rina Desai, confirmed the interaction and noted that the accused left the premises after taking the payment. The complainant immediately approached the Andheri Police Station and lodged an FIR against the accused.
+On 10th September 2025, at approximately 11:15 AM, the accused, Amit Mehra, presented forged documents to the complainant, Sunita Joshi, for the purpose of obtaining a business loan. After suspicion arose, the complainant verified the documents with the issuing authority and found them to be fabricated.
+
+The complainant immediately reported the matter to the Dadar Police Station, where FIR No. 3012/2025 was registered.
 
 Evidence Collected
-1. Statements of witnesses: Mr. Anil Kapoor, Ms. Rina Desai
-2. Bank transaction records of Rs. 50,000 to the accused’s account
-3. CCTV footage from Linking Road showing the accused’s visit
-4. Copies of messages exchanged between complainant and accused via WhatsApp
-5. Identity documents of the accused
+
+Forged business documents submitted by the accused
+
+Verification reports from the issuing authority dated 12/09/2025
+
+Statements of witnesses recorded on 13/09/2025
+
+CCTV footage of the accused visiting the complainant’s office
 
 Investigation
-Upon registration of FIR No. 2456/2024, the investigation was initiated by Officer In-Charge, Inspector Suresh Patil. The accused was summoned on 29th July 2024, and the following steps were undertaken:
 
-1. Recording of statements under Section 161 CrPC
-2. Collection and verification of bank records and CCTV footage
-3. Verification of the accused’s identity and prior criminal record
-4. Examination of witnesses at the scene of occurrence
-5. Seizure of electronic communications between the complainant and the accused
-
-The investigation established that the accused intentionally induced the complainant to part with money by making false promises, thereby committing offences under Sections 420, 406, and 34 IPC.
-
-Charges
-Based on the evidence collected, the following charges are formally brought against the accused:
-
-1. Section 420 IPC – Cheating and dishonestly inducing delivery of property
-2. Section 406 IPC – Criminal breach of trust
-3. Section 34 IPC – Acts done by several persons in furtherance of common intention
+The investigation is ongoing. The accused has been summoned to appear before the Court on 20/09/2025. Further statements of witnesses are scheduled to be recorded on 25/09/2025.
 
 Prayer
+
 It is respectfully prayed that this Hon’ble Court may:
 
-1. Take cognizance of the offences against Rahul Sharma
-2. Summon the accused to appear before the Court for trial
-3. Direct further proceedings as per the provisions of law
-4. Grant any other relief deemed appropriate in the interest of justice
+Take cognizance of the offences against Amit Mehra
 
-Investigating Officer: Suresh Patil
-Rank & Designation: Inspector, Andheri Police Station
-Date: 01/08/2024
+Summon the accused to appear before the Court for trial on 20/09/2025
+
+Direct further proceedings as per law
+
+Investigating Officer: Inspector Ramesh Desai
+Date: 15/09/2025
 Place: Mumbai
 """
+future_dates = extract_future_dates_with_context(doc_text)
+
+if future_dates:
+    json_file = save_dates_to_json(future_dates, filename="deadlines.json")
+    print(f"Extracted {len(future_dates)} future dates saved to {json_file}")
+
+    add_events_to_calendar(future_dates, calendar_id="primary")
+else:
+    print("No future dates found in this document.")
 
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=1500,
