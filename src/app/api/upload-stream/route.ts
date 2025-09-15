@@ -8,16 +8,13 @@ import { saveWithEmbedding } from "@/lib/utils/embeddings";
 import path from "path";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // 5 minutes for Vercel
+export const maxDuration = 300;
 
 function getAdminSupabase(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !serviceKey) {
-    throw new Error("Missing Supabase environment variables");
-  }
-
+  if (!url || !serviceKey) throw new Error("Missing Supabase env vars");
   return createClient(url, serviceKey);
 }
 
@@ -25,150 +22,85 @@ export async function POST(req: NextRequest) {
   const supabase = getAdminSupabase();
 
   try {
-    // 🔑 Auth check
+    // Authenticate
     const authHeader = req.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
     }
-
-    const token = authHeader.slice("Bearer ".length).trim();
+    const token = authHeader.slice(7).trim();
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (!user || userError) return new Response(JSON.stringify({ error: "Invalid user" }), { status: 401, headers: { "Content-Type": "application/json" } });
 
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid user" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    // 📄 Parse form data
+    // Parse file
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
+    if (!file) return new Response(JSON.stringify({ error: "No file uploaded" }), { status: 400, headers: { "Content-Type": "application/json" } });
 
-    if (!file) {
-      return new Response(JSON.stringify({ error: "No file uploaded" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    // 🔄 Create a stream for progress + analysis output
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
-
         const safeEnqueue = (data: any, isRaw = false) => {
           try {
-            if (isRaw) {
-              controller.enqueue(data);
-            } else {
-              controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
-            }
-          } catch (err) {
-            console.warn("Attempted enqueue after close:", err);
-          }
+            if (isRaw) controller.enqueue(data);
+            else controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
+          } catch {}
         };
 
         try {
-          // Step 1: Initial status
           safeEnqueue({ status: "uploading", message: "Processing file..." });
 
-          // Step 2: Read file buffer
           const buffer = Buffer.from(await file.arrayBuffer());
           const ext = path.extname(file.name).toLowerCase();
           const safeName = `${Date.now()}-${file.name.replace(/[^\w.-]/g, "_")}`;
 
-          safeEnqueue({ status: "extracting", message: "Extracting text from document..." });
+          safeEnqueue({ status: "extracting", message: "Extracting text..." });
 
           let extractedText: string;
-          if (ext === ".pdf") {
-            extractedText = await processDocumentText(buffer, "pdf");
-          } else if ([".jpg", ".jpeg", ".png", ".webp"].includes(ext)) {
-            extractedText = await processDocumentText(buffer, "image");
-          } else {
+          if (ext === ".pdf") extractedText = await processDocumentText(buffer, "pdf");
+          else if ([".jpg", ".jpeg", ".png", ".webp"].includes(ext)) extractedText = await processDocumentText(buffer, "image");
+          else {
             safeEnqueue({ status: "error", message: "Unsupported file type" });
             return;
           }
 
-          // Step 3: Translate text
-          safeEnqueue({ status: "translating", message: "Translating content if needed..." });
-
+          safeEnqueue({ status: "translating", message: "Translating content..." });
           const englishText = await translateText(extractedText, "en");
-          const finalText =
-            typeof englishText === "string"
-              ? englishText
-              : Array.isArray(englishText)
-              ? englishText.join(" ")
-              : String(englishText ?? "");
+          const finalText = typeof englishText === "string" ? englishText : Array.isArray(englishText) ? englishText.join(" ") : String(englishText ?? "");
 
-          // Step 4: Stream analysis from LangGraph
-          safeEnqueue({ status: "analyzing", message: "Starting document analysis..." });
-
-          const streamingResponse = await streamEnhancedLanggraphWorkflow(
-            user.id,
-            safeName,
-            finalText
-          );
-
-          const reader = streamingResponse.body?.getReader();
-          if (!reader) {
-            throw new Error("Failed to get stream reader");
-          }
+          safeEnqueue({ status: "analyzing", message: "Starting AI analysis..." });
+          const aiStream = await streamEnhancedLanggraphWorkflow(user.id, safeName, finalText);
+          const reader = aiStream.body?.getReader();
+          if (!reader) throw new Error("Failed to get AI reader");
 
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            if (value) safeEnqueue(value, true); // forward raw model bytes
+            if (value) safeEnqueue(value, true);
           }
 
-          // Step 5: Save to database
-          safeEnqueue({ status: "saving", message: "Saving document to database..." });
-
+          safeEnqueue({ status: "saving", message: "Saving document..." });
           const savedDoc = await saveWithEmbedding(supabase, {
             user_id: user.id,
             file_name: safeName,
             text: finalText,
-            category: "Processing", // update later
-            json: {
-              filename: safeName,
-              text: finalText,
-              chat_history: []
-            },
+            category: "Processing",
+            json: { filename: safeName, text: finalText, chat_history: [] },
             title: safeName
           });
 
-          // Step 6: Completion
-          safeEnqueue({
-            status: "complete",
-            message: "Processing complete",
-            db_id: savedDoc.id
-          });
+          safeEnqueue({ status: "complete", message: "Done!", db_id: savedDoc.id });
+
         } catch (error) {
-          console.error("Streaming error:", error);
-          safeEnqueue({
-            status: "error",
-            message: "An error occurred during processing",
-            error: String(error)
-          });
+          safeEnqueue({ status: "error", message: String(error) });
         } finally {
           controller.close();
         }
       }
     });
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8"
-      }
-    });
+    return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+
   } catch (error: any) {
-    console.error("Upload error:", error);
-    return new Response(JSON.stringify({ error: error.message || "Unknown error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+    return new Response(JSON.stringify({ error: error.message || "Unknown" }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 }

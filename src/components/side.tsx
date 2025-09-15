@@ -1,5 +1,5 @@
 "use client";
-import { cn } from "@/lib/utils";
+
 import React, {
   useState,
   useEffect,
@@ -15,7 +15,9 @@ import {
   IconSettings,
 } from "@tabler/icons-react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { cn } from "@/lib/utils";
 
+// ------------------- Types -------------------
 interface Links {
   label: string;
   href?: string;
@@ -29,22 +31,18 @@ interface SidebarContextProps {
   animate: boolean;
 }
 
-interface DocumentItem {
+interface ConversationItem {
   id: string;
-  title: string | null;
-  file_name: string | null;
+  title: string;
   created_at: string;
 }
 
-const SidebarContext = createContext<SidebarContextProps | undefined>(
-  undefined
-);
+// ------------------- Sidebar Context -------------------
+const SidebarContext = createContext<SidebarContextProps | undefined>(undefined);
 
 export const useSidebar = () => {
   const context = useContext(SidebarContext);
-  if (!context) {
-    throw new Error("useSidebar must be used within a SidebarProvider");
-  }
+  if (!context) throw new Error("useSidebar must be used within a SidebarProvider");
   return context;
 };
 
@@ -60,7 +58,6 @@ export const SidebarProvider = ({
   animate?: boolean;
 }) => {
   const [openState, setOpenState] = useState(false);
-
   const open = openProp !== undefined ? openProp : openState;
   const setOpen = setOpenProp !== undefined ? setOpenProp : setOpenState;
 
@@ -71,6 +68,7 @@ export const SidebarProvider = ({
   );
 };
 
+// ------------------- Sidebar Component -------------------
 export const Sidebar = ({
   children,
   open,
@@ -81,31 +79,28 @@ export const Sidebar = ({
   open?: boolean;
   setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   animate?: boolean;
-}) => {
-  return (
-    <SidebarProvider open={open} setOpen={setOpen} animate={animate}>
-      {children}
-    </SidebarProvider>
-  );
-};
+}) => (
+  <SidebarProvider open={open} setOpen={setOpen} animate={animate}>
+    {children}
+  </SidebarProvider>
+);
 
+// ------------------- Sidebar Body -------------------
 export const SidebarBody = ({
   children,
   ...props
 }: {
   children?: ReactNode;
-} & React.ComponentProps<typeof motion.div>) => {
-  return (
-    <>
-      <DesktopSidebar {...props}>{children}</DesktopSidebar>
-      {/* 👇 Cast to plain div props so MotionStyle never leaks */}
-      <MobileSidebar {...(props as React.ComponentProps<"div">)}>
-        {children}
-      </MobileSidebar>
-    </>
-  );
-};
+} & React.ComponentProps<typeof motion.div>) => (
+  <>
+    <DesktopSidebar {...props}>{children}</DesktopSidebar>
+    <MobileSidebar {...(props as React.ComponentProps<"div">)}>
+      {children}
+    </MobileSidebar>
+  </>
+);
 
+// ------------------- Desktop Sidebar -------------------
 export const DesktopSidebar = ({
   className,
   children,
@@ -118,13 +113,10 @@ export const DesktopSidebar = ({
   return (
     <motion.div
       className={cn(
-        "h-full px-4 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 justify-between",
-        "bg-[#0D1117] text-neutral-200 shadow-lg border-r border-[#1B263B]",
+        "h-full px-4 py-4 hidden md:flex md:flex-col w-[300px] shrink-0 justify-between bg-[#0D1117] text-neutral-200 shadow-lg border-r border-[#1B263B]",
         className
       )}
-      animate={{
-        width: animate ? (open ? "300px" : "60px") : "300px",
-      }}
+      animate={{ width: animate ? (open ? "300px" : "60px") : "300px" }}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       {...props}
@@ -135,6 +127,7 @@ export const DesktopSidebar = ({
   );
 };
 
+// ------------------- Mobile Sidebar -------------------
 export const MobileSidebar = ({
   className,
   children,
@@ -150,10 +143,7 @@ export const MobileSidebar = ({
       {...props}
     >
       <div className="flex justify-end z-20 w-full">
-        <IconMenu2
-          className="text-neutral-200"
-          onClick={() => setOpen(!open)}
-        />
+        <IconMenu2 className="text-neutral-200" onClick={() => setOpen(!open)} />
       </div>
       <AnimatePresence>
         {open && (
@@ -161,10 +151,7 @@ export const MobileSidebar = ({
             initial={{ x: "-100%", opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: "-100%", opacity: 0 }}
-            transition={{
-              duration: 0.3,
-              ease: "easeInOut",
-            }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
             className={cn(
               "fixed h-full w-full inset-0 bg-[#0D1117] text-neutral-200 p-10 z-[100] flex flex-col justify-between",
               className
@@ -185,7 +172,7 @@ export const MobileSidebar = ({
   );
 };
 
-
+// ------------------- Sidebar Link -------------------
 export const SidebarLink = ({
   link,
   className,
@@ -219,6 +206,7 @@ export const SidebarLink = ({
   );
 };
 
+// ------------------- Sidebar Footer -------------------
 const SidebarFooter = () => {
   const supabase = createClientComponentClient();
   const { open, animate } = useSidebar();
@@ -230,7 +218,6 @@ const SidebarFooter = () => {
 
   return (
     <div className="flex flex-col gap-2 border-t border-[#1B263B] pt-2">
-      {/* Logout */}
       <button
         onClick={handleLogout}
         className="flex items-center gap-2 px-2 py-1 text-sm hover:text-red-500 transition-colors"
@@ -238,11 +225,7 @@ const SidebarFooter = () => {
         <IconLogout size={18} />
         <motion.span
           animate={{
-            display: animate
-              ? open
-                ? "inline-block"
-                : "none"
-              : "inline-block",
+            display: animate ? (open ? "inline-block" : "none") : "inline-block",
             opacity: animate ? (open ? 1 : 0) : 1,
           }}
           className="truncate max-w-[200px]"
@@ -250,17 +233,11 @@ const SidebarFooter = () => {
           Logout
         </motion.span>
       </button>
-
-      {/* Settings */}
       <button className="flex items-center gap-2 px-2 py-1 text-sm hover:text-blue-400 transition-colors">
         <IconSettings size={18} />
         <motion.span
           animate={{
-            display: animate
-              ? open
-                ? "inline-block"
-                : "none"
-              : "inline-block",
+            display: animate ? (open ? "inline-block" : "none") : "inline-block",
             opacity: animate ? (open ? 1 : 0) : 1,
           }}
           className="truncate max-w-[200px]"
@@ -272,65 +249,86 @@ const SidebarFooter = () => {
   );
 };
 
+// ------------------- Sidebar with Conversation History -------------------
 export const SidebarDemo = ({
   onSelectHistory,
 }: {
-  onSelectHistory: (id: string) => void;
+  onSelectHistory: (data: any) => void;
 }) => {
   const supabase = createClientComponentClient();
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchDocuments = async () => {
+    const fetchConversations = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data, error } = await supabase
-        .from("documents")
-        .select("id, title, file_name, created_at")
+        .from("conversations")
+        .select("id, data, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(12);
+
       if (!error && data) {
-        setDocuments(data);
+        setConversations(
+          data.map((c: any) => ({
+            id: c.id,
+            title: c.data.display_input?.query || "Untitled Conversation",
+            created_at: c.created_at,
+          }))
+        );
       }
     };
-
-    fetchDocuments();
+    fetchConversations();
   }, [supabase]);
+
+  const handleSelect = async (id: string) => {
+    setSelectedId(id);
+    const { data, error } = await supabase
+      .from("conversations")
+      .select("data")
+      .eq("id", id)
+      .single();
+
+    if (!error && data) {
+      onSelectHistory(data.data);
+    } else {
+      console.error("Failed to load conversation", error);
+    }
+  };
 
   return (
     <Sidebar>
       <SidebarBody>
-        {/* Dashboard link */}
         <SidebarLink
           link={{
-            label: "Upload New Document",
+            label: "New Conversation",
             icon: <span>❇️</span>,
             onClick: () => window.location.assign("/"),
           }}
         />
-
-        {/* Documents Section */}
         <div className="mt-4 flex flex-col gap-1">
           <div className="text-xs uppercase text-neutral-400 mb-1">
-            All Docs
+            Conversation History
           </div>
 
-          {documents.length === 0 && (
-            <div className="text-neutral-500 text-sm">No documents yet</div>
+          {conversations.length === 0 && (
+            <div className="text-neutral-500 text-sm">No conversations yet</div>
           )}
 
-          {documents.map((doc) => (
+          {conversations.map((conv) => (
             <SidebarLink
-              key={doc.id}
+              key={conv.id}
               link={{
-                label: doc.title || doc.file_name || "Untitled Document",
-                icon: <span>📄</span>,
-                onClick: () => onSelectHistory(doc.id),
+                label: conv.title,
+                icon: <span>💬</span>,
+                onClick: () => handleSelect(conv.id),
               }}
+              className={selectedId === conv.id ? "text-blue-400 font-bold" : ""}
             />
           ))}
         </div>

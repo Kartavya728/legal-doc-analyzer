@@ -1,25 +1,21 @@
+// page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { SidebarDemo } from "@/components/side";
 import HomePage from "@/components/home-page";
 import AuthUI from "@/components/auth-form";
+import { SidebarDemo } from "@/components/side"; // <- This now works
 
 export default function Page() {
   const supabase = createClientComponentClient();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
-  // 🔹 Selected document state
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
 
-  // Load auth state
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
       setLoading(false);
     };
@@ -27,71 +23,30 @@ export default function Page() {
     getUser();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-      }
+      (_event, session) => setUser(session?.user ?? null)
     );
 
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    return () => listener.subscription.unsubscribe();
   }, [supabase]);
 
-  // 🔹 Handler when a sidebar item is clicked
-  const handleSelectDocument = async (id: string) => {
-    console.log("Document selected:", id);
+  const handleSelectDocument = (doc: any) => setSelectedDoc(doc);
 
-    const { data, error } = await supabase
-      .from("documents")
-      .select(
-        `
-        id,
-        title,
-        file_name,
-        original_text,
-        translated_text,
-        summary,
-        category,
-        structure,
-        metadata,
-        created_at
-      `
-      )
-      .eq("id", id)
-      .single();
+  if (loading)
+    return <div className="flex items-center justify-center h-screen text-lg">Loading...</div>;
 
-    if (error) {
-      console.error("Error fetching document:", error);
-      return;
-    }
-
-    setSelectedDoc(data);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen text-lg">
-        Loading...
-      </div>
-    );
-  }
-
-  // 🔹 Show Auth page if not logged in
-  if (!user) {
+  if (!user)
     return (
       <div className="flex items-center justify-center h-screen bg-slate-950 text-white">
         <AuthUI />
       </div>
     );
-  }
 
-  // 🔹 Logged in → show sidebar + homepage
   return (
     <div className="flex h-screen">
-      {/* Sidebar that loads documents */}
+      {/* Sidebar */}
       <SidebarDemo onSelectHistory={handleSelectDocument} />
 
-      {/* Main content updates when doc is selected */}
+      {/* Main content */}
       <main className="flex-1 overflow-y-auto w-full">
         <HomePage user={user} document={selectedDoc} />
       </main>
