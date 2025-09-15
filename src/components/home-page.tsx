@@ -93,7 +93,8 @@ export default function HomePage({ user, document }: HomePageProps) {
         return;
       }
 
-      const res = await fetch("/api/upload", {
+      // Use streaming endpoint for real-time updates
+      const res = await fetch("/api/upload-stream", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -101,15 +102,74 @@ export default function HomePage({ user, document }: HomePageProps) {
         body: formData,
       });
 
-      const data = await res.json();
+      if (!res.body) {
+        throw new Error("Response body is null");
+      }
 
-      if (res.ok) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let streamedData = "";
+      let finalResult = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        streamedData += chunk;
+        
+        // Process each line (each JSON object)
+        const lines = streamedData.split("\n");
+        streamedData = lines.pop() || ""; // Keep the last incomplete line for next iteration
+        
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          
+          try {
+            const update = JSON.parse(line);
+            console.log("Stream update:", update);
+            
+            // Update processing status based on streaming updates
+            if (update.status) {
+              setProcessingStep(update.message || update.status);
+              
+              // Calculate progress based on status
+              const progressMap: Record<string, number> = {
+                "uploading": 10,
+                "extracting": 20,
+                "translating": 30,
+                "analyzing": 40,
+                "classifying": 50,
+                "classified": 60,
+                "processing": 70,
+                "streaming": 80,
+                "generating_ui": 90,
+                "saving": 95,
+                "complete": 100,
+                "error": 100
+              };
+              
+              setProcessingProgress(progressMap[update.status] || processingProgress);
+              
+              // If we have a complete result, save it
+              if (update.status === "complete" && update.result) {
+                finalResult = update.result;
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing stream update:", e);
+          }
+        }
+      }
+
+      // Set the final result if we have one
+      if (finalResult) {
         setResult({
-          ...data.result,
-          uploadedImageUrl: uploadImageUrl, // Add the uploaded image URL
+          ...finalResult,
+          uploadedImageUrl: uploadImageUrl // Add the uploaded image URL
         });
       } else {
-        alert("Error: " + data.error);
+        alert("Error: No result received");
         setShowUploadForm(true);
       }
     } catch (err) {

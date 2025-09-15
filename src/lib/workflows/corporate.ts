@@ -163,11 +163,11 @@ async function* generateCorporateSummary(corporateResults: any[], documentType: 
 /**
  * Process a corporate document
  * @param chunks Text chunks from the document
- * @param category Document category
+
  * @param docText Full document text
  * @returns Promise resolving to [summary, jsonData]
  */
-export async function corporateWorkflow(chunks: string[], category: string, docText: string): Promise<[string, any]> {
+export async function corporateWorkflow(chunks: string[], docText: string): Promise<[string, any]> {
   console.log("Starting corporate document workflow...");
   
   // Extract all clauses from chunks

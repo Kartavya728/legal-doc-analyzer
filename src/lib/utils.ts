@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 // Initialize Google Generative AI
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY || "");
 
 /**
  * Call the Gemini model with a prompt
@@ -22,7 +22,7 @@ export async function callGemini(prompt: string): Promise<string> {
       return "Error: API key not configured";
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
     
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -49,7 +49,7 @@ export async function* streamGemini(prompt: string) {
       return;
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
     
     const result = await model.generateContentStream(prompt);
     
@@ -63,11 +63,11 @@ export async function* streamGemini(prompt: string) {
   }
 }
 
-// Function to generate UI models for related content with online data search
+// Function to generate UI models for related content with enhanced image search
 export async function generateUIModels(content: string, description: string, documentType?: string) {
   try {
     // Add loading state indicator
-    console.log('Generating UI models with online data search...');
+    console.log('Generating UI models with image search...');
     
     // Log input data
     console.log('UI Model Input Data:', {
@@ -75,7 +75,7 @@ export async function generateUIModels(content: string, description: string, doc
       contentPreview: content.substring(0, 100) + '...',
       description,
       documentType,
-      enableOnlineSearch: true
+      enableImageSearch: true
     });
     
     // Call an API to generate UI models based on content and description
@@ -88,7 +88,7 @@ export async function generateUIModels(content: string, description: string, doc
         content, 
         description,
         documentType, // Add document type for better context
-        enableOnlineSearch: true // Enable online data search
+        enableImageSearch: true // Enable internet image search
       }),
     });
 

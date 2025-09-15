@@ -10,7 +10,7 @@ interface UIModel {
 
 export async function POST(request: Request) {
   try {
-    const { content, description, documentType, enableOnlineSearch } = await request.json();
+    const { content, description, documentType, enableImageSearch } = await request.json();
     
     if (!content) {
       return NextResponse.json({ error: 'Content is required' }, { status: 400 });
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       contentPreview: content.substring(0, 100) + '...',
       description,
       documentType,
-      enableOnlineSearch
+      enableImageSearch
     });
 
     // Generate UI models based on content analysis

@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processDocumentText } from "@/lib/utils/pdf-processor";
 import { translateText } from "@/lib/utils/translate";
-import { runLanggraphStream } from "@/lib/langgraph/main-langgraph";
+import { runEnhancedLanggraphWorkflow } from "@/lib/langgraph/main-langgraph";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { saveWithEmbedding } from "@/lib/utils/embeddings";
 import path from "path";
@@ -67,25 +67,25 @@ export async function POST(req: NextRequest) {
                      Array.isArray(englishText) ? englishText.join(" ") : 
                      String(englishText ?? "");
 
-    // Process with LangGraph streaming
-    const processedResult = await runLanggraphStream({
-      text: finalText,
-      filename: safeName,
-      userId: user.id
-    });
+    // ✅ Run Enhanced LangGraph Workflow (not the old stream)
+    const processedResult = await runEnhancedLanggraphWorkflow(
+      user.id,
+      safeName,
+      finalText
+    );
 
     // Save to database
     const savedDoc = await saveWithEmbedding(supabase, {
       user_id: user.id,
       file_name: processedResult.filename,
-      text: processedResult.content,
-      structure: processedResult.structure,
+      text: processedResult.text,                 // ✅ updated (was content)
+      structure: processedResult.uiStructure,     // ✅ updated (was structure)
       category: processedResult.category,
       json: {
         ...processedResult,
         chat_history: [],
       },
-      title: processedResult.title,
+      title: processedResult.workflowOutput?.summary || processedResult.filename,
     });
 
     return NextResponse.json({
