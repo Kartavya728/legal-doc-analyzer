@@ -15,13 +15,11 @@
  */
 
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { searchGoogle } from "./google-search"; // adjust path to your helper
-// If you have a runLanggraph wrapper you prefer, you can call it instead for decision/codegen flows.
-// import { runLanggraph } from "@/lib/langgraph/main-langgraph";
+import { searchGoogle } from "./google-search"; // adjust path to your helper if needed
 
 type CategoryTheme = Record<string, string>;
 
-// ---------- Types (kept similar to your previous file) ----------
+// ---------- Types ----------
 export interface UIGeneratorInput {
   category: string;
   title?: string;
@@ -88,6 +86,48 @@ export interface AdaptiveUIPayload {
     }
   >;
   generatedCode?: string; // optional code string (fallback)
+  displayData: {
+    summary: {
+      summaryText?: string;
+      importantPoints?: string[];
+      mainRisksRightsConsequences?: string;
+      whatYouShouldDoNow?: string[];
+      whatHappensIfYouIgnoreThis?: string;
+    };
+    clauses: Array<{
+      title: string;
+      content: string;
+      importance: string;
+      explanation: string;
+    }>;
+    relatedInfo: Array<{
+      title: string;
+      description: string;
+      icon: string;
+      link: string;
+    }>;
+    tables: Array<{
+      title: string;
+      description: string;
+      columns: Array<{ key: string; label: string }>;
+      rows: any[];
+    }>;
+    flowCharts: Array<{
+      title: string;
+      description: string;
+      events: Array<{
+        date: string;
+        title: string;
+        description: string;
+        impact: string;
+      }>;
+    }>;
+    images: Array<{
+      url: string;
+      alt: string;
+      caption: string;
+    }>;
+  };
   metadata: {
     generatedAt: string;
     category: string;
@@ -153,42 +193,40 @@ function getCategoryTheme(category: string): CategoryTheme {
   return themes[category] || themes["Personal Legal Documents"];
 }
 
+// ---------- LLM: Gemini 2.5 Pro instance ----------
 const llm = new ChatGoogleGenerativeAI({
-  model: "gemini-1.5-pro",
-  apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY, // ✅ correct env var
-  temperature: 0.15,
+  model: "gemini-2.5-pro",
+  apiKey: process.env.GOOGLE_GENAI_API_KEY,
+  temperature: 0.12,
   streaming: false,
-});
-
-// Streaming LLM instance for real-time UI generation
-const streamingLlm = new ChatGoogleGenerativeAI({
-  model: "gemini-1.5-pro",
-  apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY,
-  temperature: 0.15,
-  streaming: true,
 });
 
 /* ---------------------------
    LLM CALL WRAPPER
-   returns the raw string (content) from Gemini
+   returns the raw string (content) from Gemini, with safe fallback
 ---------------------------- */
-async function callLLM(prompt: string): Promise<string> {
-  const res = await llm.invoke(prompt);
-  // result may have structure; using .content as earlier usage
-  if (typeof res.content === "string") return res.content;
-  // fallback stringify
-  return JSON.stringify(res.content || res, null, 2);
+async function callLLM(prompt: string, timeoutMs = 30000): Promise<string> {
+  try {
+    // Basic timeout guard
+    const p = llm.invoke(prompt);
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("LLM call timeout")), timeoutMs)
+    );
+    const res: any = await Promise.race([p, timeout]);
+    if (!res) return "";
+    if (typeof res.content === "string") return res.content;
+    // attempt to stringify structured content
+    return JSON.stringify(res.content || res, null, 2);
+  } catch (err: any) {
+    console.warn("callLLM error:", err);
+    return `{"error":"LLM error: ${String(err)}"}`;
+  }
 }
 
 /* ===========================
    1) Title & Summary Updater
-   - Normalize or create a concise title (4-8 words)
-   - Create a short summary (1-2 sentences) used for the summary card
-   - Return { title, shortSummary, recommendedChatQuestions[] }
-   These run in parallel with decision+component generation.
 =========================== */
 async function updateTitleAndSummary(input: UIGeneratorInput) {
-  // Offer rich prompt with context; ask for JSON.
   const prompt = `
 You are an expert assistant that writes concise titles and short summaries.
 
@@ -216,7 +254,6 @@ Return ONLY valid JSON.
 
   const out = await callLLM(prompt);
   const parsed = parseJsonSafe(out);
-  // fallback behavior
   return {
     title: parsed?.title || input.title || "Document Overview",
     shortSummary:
@@ -235,12 +272,7 @@ Return ONLY valid JSON.
 }
 
 /* ===========================
-   2) Decision Model
-   - Decide which components to include and for what purpose
-   - Must return 3-6 components, at least 3.
-   - Must not include Images component unless clearly needed
-   - Ensure at least two components have distinct content purposes
-   - Output returned as JSON { components: [ UIComponentSpec ], rationale: string }
+   2) Decision Model: choose components
 =========================== */
 async function decideComponents(input: UIGeneratorInput) {
   const prompt = `
@@ -269,8 +301,6 @@ Provide a short rationale describing why you chose these components.
 Return only JSON.
 `;
 
-  // Prefer to call a specialized codeflow via runLanggraph if available.
-  // But we'll call Gemini directly (callLLM).
   let outRaw: string;
   try {
     outRaw = await callLLM(prompt);
@@ -280,11 +310,12 @@ Return only JSON.
   }
 
   let parsed = parseJsonSafe(outRaw);
+
+  // If LLM didn't return components as expected, fallback to heuristics
   if (!parsed || !Array.isArray(parsed?.components)) {
-    // Fallback heuristic generation (guarantee 3 components)
     const comps: UIComponentSpec[] = [];
 
-    // 1) Summary card
+    // Always include summary card
     comps.push({
       id: uuid("summary-"),
       kind: "card",
@@ -294,7 +325,6 @@ Return only JSON.
       priority: "high",
     });
 
-    // 2) If keyDates present => timeline + table
     const jsonData = input.jsonData || {};
     const keyDates = jsonData.keyDates || input.summary?.keyDates || [];
     const skills = jsonData.skills || jsonData.achievements || input.summary?.importantPoints || [];
@@ -308,7 +338,6 @@ Return only JSON.
         dataState: { kind: "timeseries", sample: keyDates.slice(0, 20) },
         priority: "high",
       });
-      // Also add a table of items
       comps.push({
         id: uuid("table-"),
         kind: "table",
@@ -318,7 +347,6 @@ Return only JSON.
         priority: "medium",
       });
     } else if (Array.isArray(skills) && skills.length > 0) {
-      // show skills table + highlights grid
       comps.push({
         id: uuid("skills-"),
         kind: "table",
@@ -343,7 +371,6 @@ Return only JSON.
         priority: "medium",
       });
     } else {
-      // default: summary + table + dropdown
       comps.push({
         id: uuid("table-default-"),
         kind: "table",
@@ -362,24 +389,24 @@ Return only JSON.
       });
     }
 
-    const rationale = `Fallback heuristic chosen based on presence of keyDates=${(keyDates || []).length} skills=${(skills || []).length}.`;
-    parsed = { components: comps, rationale };
+    parsed = { components: comps, rationale: `Fallback heuristic chosen based on keyDates=${(keyDates || []).length} skills=${(skills || []).length}` };
   }
 
-  // post-process: ensure at least 3 components and no identical content purpose
-  let components: UIComponentSpec[] = parsed.components.slice(0, 6);
-  // ensure unique titles
+  // Post-process
+  let components: UIComponentSpec[] = (parsed.components || []).slice(0, 6);
+
+  // unique titles only
   const seenTitles = new Set<string>();
   components = components.filter((c) => {
     if (!c.title) return false;
-    if (seenTitles.has(c.title.trim().toLowerCase())) return false;
-    seenTitles.add(c.title.trim().toLowerCase());
+    const t = c.title.trim().toLowerCase();
+    if (seenTitles.has(t)) return false;
+    seenTitles.add(t);
     return true;
   });
 
-  // enforce at least 3
+  // ensure at least 3 components
   if (components.length < 3) {
-    // add fallback summary and dropdowns
     components.push({
       id: uuid("summary-"),
       kind: "card",
@@ -398,11 +425,10 @@ Return only JSON.
     });
   }
 
-  // decide whether images component is allowed
+  // remove images if json doesn't include images
   const hasImagesInData = Array.isArray(input.jsonData?.images) && input.jsonData.images.length > 0;
   const includesImages = components.some((c) => c.kind === "images");
   if (includesImages && !hasImagesInData) {
-    // remove images if not supported
     components = components.filter((c) => c.kind !== "images");
   }
 
@@ -416,23 +442,16 @@ Return only JSON.
 
 /* ===========================
    3) Component content generation
-   - For each component spec create structured content expected by each React component
-   - Runs in parallel and yields { id, spec, content }
-   - For websearch component we call searchGoogle to fetch results
-   - Images component only produced if data indicates
 =========================== */
 async function generateComponentContent(spec: UIComponentSpec, input: UIGeneratorInput) {
-  // dispatch by kind
   const jsonData = input.jsonData || {};
   const sampleData = input.sampleData || [];
 
-  // Base prompt templates per kind (detailed)
   async function runLLMForComponent(prompt: string) {
     try {
       const out = await callLLM(prompt);
       const parsed = parseJsonSafe(out);
-      // if parse fails, return raw text as fallback
-      return parsed ?? { text: out.trim() };
+      return parsed ?? { text: (out || "").toString().trim() };
     } catch (err) {
       return { text: `LLM error: ${String(err)}` };
     }
@@ -440,89 +459,108 @@ async function generateComponentContent(spec: UIComponentSpec, input: UIGenerato
 
   switch (spec.kind) {
     case "card": {
-      // Use summary or important points
       const prompt = `
 You are writing content for a "Summary Card" UI component.
 Input summary/object:
 ${safeStringify(input.summary || jsonData || {})}
 
 Return JSON:
-{ "title": "${spec.title}", "body": "1-2 short sentences", "bullets": ["short bullet 1","short bullet 2"] }
+{
+  "summaryText": "Detailed summary paragraph about the document",
+  "importantPoints": ["Key point 1", "Key point 2", "Key point 3"],
+  "mainRisksRightsConsequences": "Detailed description of risks, rights, and consequences",
+  "whatYouShouldDoNow": ["Action item 1", "Action item 2", "Action item 3"],
+  "whatHappensIfYouIgnoreThis": "Description of consequences if ignored"
+}
 `;
       const content = await runLLMForComponent(prompt);
       return { id: spec.id, spec, content };
     }
 
     case "table": {
-      // aim to produce rows / columns
-      // If spec provides sample, use that; else derive from jsonData keys
       let sample = spec.dataState?.sample ?? sampleData;
       if (!Array.isArray(sample) || sample.length === 0) {
-        // build a sample from jsonData fields
         const fallbackRows: any[] = [];
         if (Array.isArray(jsonData?.projects)) {
-          for (const p of (jsonData.projects as any[]).slice(0, 10)) {
-            fallbackRows.push(p);
-          }
+          fallbackRows.push(...(jsonData.projects as any[]).slice(0, 10));
         } else if (Array.isArray(jsonData?.keyDates)) {
-          for (const d of (jsonData.keyDates as any[]).slice(0, 20)) fallbackRows.push(d);
+          fallbackRows.push(...(jsonData.keyDates as any[]).slice(0, 20));
         } else if (Array.isArray(jsonData?.skills)) {
           (jsonData.skills as any[]).slice(0, 20).forEach((s, i) => fallbackRows.push({ id: i + 1, skill: s }));
         }
         sample = fallbackRows;
       }
 
-      // If still empty, ask LLM to create a compact sample
       if (!Array.isArray(sample) || sample.length === 0) {
         const prompt = `
 Create up to 6 example rows for a table titled "${spec.title}" based on this summary:
 ${safeStringify(input.summary || jsonData || {})}
-Return JSON array of objects.
+Return JSON array of objects with columns: title, description, relevance.
 `;
         const rows = await runLLMForComponent(prompt);
         sample = Array.isArray(rows) ? rows : [];
       }
 
-      // Determine columns automatically
       const columns =
         spec.dataState?.columns ??
         (Array.isArray(sample) && sample.length > 0 ? Object.keys(sample[0]).map((k) => ({ key: k, label: k })) : []);
 
-      return { id: spec.id, spec, content: { columns, rows: sample } };
+      const tables = [
+        {
+          title: spec.title || "Document Analysis",
+          description: spec.description || "Key information extracted from the document",
+          columns,
+          rows: sample,
+        },
+      ];
+
+      return { id: spec.id, spec, content: { tables } };
     }
 
     case "timeline":
     case "flowchart": {
-      // Use keyDates or derive events from summary
       let events = jsonData?.keyDates ?? input.summary?.keyDates ?? [];
       if (!Array.isArray(events) || events.length === 0) {
-        // ask LLM to generate timeline events from summary
         const prompt = `
 You are a timeline extractor. Based on this summary produce 4-8 timeline events:
 ${safeStringify(input.summary || jsonData || {})}
-Return JSON array: [{ "date":"YYYY-MM-DD", "title":"", "description":"" }]
+Return JSON array: [{ "date":"YYYY-MM-DD", "title":"", "description":"", "impact":"" }]
 `;
         const out = await runLLMForComponent(prompt);
         events = Array.isArray(out) ? out : [];
       }
 
-      return { id: spec.id, spec, content: { events } };
+      const flowCharts = [
+        {
+          title: spec.title || "Document Timeline",
+          description: spec.description || "Key events and milestones",
+          events,
+        },
+      ];
+
+      return { id: spec.id, spec, content: { flowCharts } };
     }
 
     case "grid": {
-      // Grid of highlights or cards
       let cards = spec.dataState?.sample ?? input.summary?.importantPoints ?? jsonData?.highlights ?? [];
       if (!Array.isArray(cards) || cards.length === 0) {
         const prompt = `
 Create 6 short highlight cards (title & one-line subtitle) for the document summary:
 ${safeStringify(input.summary || jsonData || {})}
-Return JSON array: [{ "title":"", "subtitle":"" }]
+Return JSON array: [{ "title":"", "subtitle":"", "icon":"info|warning|check|alert", "link":"" }]
 `;
         const out = await runLLMForComponent(prompt);
         cards = Array.isArray(out) ? out : [];
       }
 
-      return { id: spec.id, spec, content: { cards } };
+      const relatedInfo = cards.map((card: any) => ({
+        title: card.title || "",
+        description: card.subtitle || card.description || "",
+        icon: card.icon || "info",
+        link: card.link || "",
+      }));
+
+      return { id: spec.id, spec, content: { relatedInfo } };
     }
 
     case "dropdown":
@@ -531,11 +569,23 @@ Return JSON array: [{ "title":"", "subtitle":"" }]
       return { id: spec.id, spec, content: { options } };
     }
 
+    case "text": {
+      let clauses = jsonData?.clauses || [];
+      if (!Array.isArray(clauses) || clauses.length === 0) {
+        const prompt = `
+Extract 3-5 important clauses from this legal document summary:
+${safeStringify(input.summary || jsonData || {})}
+Return JSON array: [{ "title":"", "content":"", "importance":"high|medium|low", "explanation":"" }]
+`;
+        const out = await runLLMForComponent(prompt);
+        clauses = Array.isArray(out) ? out : [];
+      }
+      return { id: spec.id, spec, content: { clauses } };
+    }
+
     case "chart": {
-      // placeholder: return dataset summary
       let dataset = spec.dataState?.sample ?? sampleData ?? jsonData?.amounts ?? [];
       if (!Array.isArray(dataset) || dataset.length === 0) {
-        // request small synthetic dataset
         const prompt = `
 Produce up to 8 numeric datapoints (label + value) appropriate for a chart titled "${spec.title}" based on this summary:
 ${safeStringify(input.summary || jsonData || {})}
@@ -548,13 +598,11 @@ Return JSON array: [{ "label": "X", "value": 123 }]
     }
 
     case "websearch": {
-      // call searchGoogle if available
       const q = spec.props?.query || input.title || (input.summary && (input.summary.summaryText || input.summary));
-      let results = [];
+      let results: any[] = [];
       try {
         if (typeof searchGoogle === "function" && q) {
           results = await searchGoogle(String(q));
-          // normalize
           results = (results || []).slice(0, 6).map((r: any) => ({
             title: r.title || r.name || r.heading,
             snippet: r.snippet || r.description || "",
@@ -569,13 +617,16 @@ Return JSON array: [{ "label": "X", "value": 123 }]
     }
 
     case "images": {
-      // Only allowed if input.jsonData.images present
-      const images = Array.isArray(jsonData?.images) ? jsonData.images : [];
+      const imageData = Array.isArray(jsonData?.images) ? jsonData.images : [];
+      const images = imageData.map((img: any) => ({
+        url: img.url || img.src || "",
+        alt: img.alt || img.description || "Document image",
+        caption: img.caption || img.title || "",
+      }));
       return { id: spec.id, spec, content: { images } };
     }
 
     default: {
-      // generic text component
       const prompt = `
 Prepare text content for a component titled "${spec.title}" based on this document:
 ${safeStringify(input.summary || jsonData || {})}
@@ -589,46 +640,40 @@ Return JSON: { "text": "short text (200-400 chars)" }
 }
 
 /* ===========================
-   Top-level function: generateAdaptiveUI
-   - orchestrates the 3 parallel tasks
-   - returns AdaptiveUIPayload
+   Top-level: generateAdaptiveUI
 =========================== */
 export async function generateAdaptiveUI(input: UIGeneratorInput): Promise<AdaptiveUIPayload> {
-  // print raw input for debug
   console.log("📥 [UI GEN] starting with input:", safeStringify(input).slice(0, 2000));
 
-  const theme = getCategoryTheme(input.category);
+  const theme = getCategoryTheme(input.category || "Personal Legal Documents");
 
-  // Run three major tasks in parallel:
-  // A) Title & short summary update
-  // B) Decision model to choose components
-  // C) (deferred) component content generation once components known
+  // A) Title & summary update, B) Decision model
   const [titleSummaryResult, decisionResult] = await Promise.all([
     updateTitleAndSummary(input),
     decideComponents(input),
   ]);
 
-  // ensure unique components at least 3
-  const decidedComponents: UIComponentSpec[] = decisionResult.components.map((c) => {
-    // normalize id if missing
+  // normalize decided components and ensure ids
+  const decidedComponents: UIComponentSpec[] = (decisionResult.components || []).map((c) => {
     if (!c.id) c.id = uuid("comp-");
     return c;
   });
 
-  // Guarantee at least 3 components
+  // Guarantee at least 3 components (fallback)
   if (decidedComponents.length < 3) {
-    // add fallback summary and dropdowns
-    decidedComponents.push({
-      id: uuid("summary-"),
-      kind: "card",
-      title: "Executive Summary",
-      description: "Concise summary of the document.",
-      dataState: { kind: "none", sample: [] },
-      priority: "high",
-    });
+    while (decidedComponents.length < 3) {
+      decidedComponents.push({
+        id: uuid("fallback-"),
+        kind: "card",
+        title: "Additional Summary",
+        description: "Fallback auto-generated summary card",
+        dataState: { kind: "none", sample: [] },
+        priority: "low",
+      });
+    }
   }
 
-  // Avoid duplicate kinds/titles — dedupe by title lowercased
+  // Dedupe by title
   const uniqueByTitle: UIComponentSpec[] = [];
   const seen = new Set<string>();
   for (const c of decidedComponents) {
@@ -639,14 +684,14 @@ export async function generateAdaptiveUI(input: UIGeneratorInput): Promise<Adapt
     }
   }
 
-  // Decide whether to include images component: only if input.jsonData.images present OR decision said images and jsonData has images
+  // Filter out images if input doesn't have images
   const hasImagesData = Array.isArray(input.jsonData?.images) && input.jsonData.images.length > 0;
   const finalComponents = uniqueByTitle.filter((c) => {
     if (c.kind === "images" && !hasImagesData) return false;
     return true;
   });
 
-  // Ensure at least 3 now
+  // Ensure at least 3 final components
   while (finalComponents.length < 3) {
     finalComponents.push({
       id: uuid("extra-"),
@@ -658,41 +703,188 @@ export async function generateAdaptiveUI(input: UIGeneratorInput): Promise<Adapt
     });
   }
 
-  // Now generate contents for each component in parallel
+  // Generate content for each component in parallel
   const genPromises = finalComponents.map((spec) => generateComponentContent(spec, input));
   const settled = await Promise.allSettled(genPromises);
 
-  // build generatedContent map
   const generatedContent: AdaptiveUIPayload["generatedContent"] = {};
+  
+  // Create structured displayData for Display component
+  const displayData: any = {
+    summary: {
+      summaryText: "",
+      importantPoints: [],
+      mainRisksRightsConsequences: "",
+      whatYouShouldDoNow: [],
+      whatHappensIfYouIgnoreThis: ""
+    },
+    clauses: [],
+    relatedInfo: [],
+    tables: [],
+    flowCharts: [],
+    images: [],
+    webSearchResults: []
+  };
+  
+  // Print raw input data to terminal
+  console.log("\n==== ENHANCED UI GENERATOR INPUT ====");
+  console.log("Input data:", JSON.stringify(input, null, 2));
+  console.log("========================\n");
+
+  // Create a state map to store component data for debugging and tracking
+  const componentDataMap = new Map();
+  
   settled.forEach((s, idx) => {
     const spec = finalComponents[idx];
     if (s.status === "fulfilled") {
-      generatedContent[spec.id] = { spec, content: s.value.content ?? s.value };
+      const value = s.value;
+      const content = value.content ?? value;
+      generatedContent[spec.id] = { spec, content };
+      
+      // Store in component data map
+      componentDataMap.set(spec.id, {
+        kind: spec.kind,
+        content: content,
+        timestamp: new Date().toISOString()
+      });
+
+      // map content into displayData fields with proper structure
+      if (spec.kind === "card" && content) {
+        // Ensure summary has the correct structure
+        displayData.summary = {
+          summaryText: content.summaryText || "",
+          importantPoints: Array.isArray(content.importantPoints) ? content.importantPoints : [],
+          mainRisksRightsConsequences: content.mainRisksRightsConsequences || "",
+          whatYouShouldDoNow: Array.isArray(content.whatYouShouldDoNow) ? content.whatYouShouldDoNow : [],
+          whatHappensIfYouIgnoreThis: content.whatHappensIfYouIgnoreThis || ""
+        };
+      }
+      if (content?.clauses) {
+        // Ensure clauses have the correct structure
+        displayData.clauses = Array.isArray(content.clauses) ? content.clauses.map(clause => ({
+          title: clause.title || "",
+          content: clause.content || "",
+          importance: clause.importance || "medium",
+          explanation: clause.explanation || ""
+        })) : [];
+      }
+      if (content?.relatedInfo) {
+        // Ensure relatedInfo has the correct structure
+        displayData.relatedInfo = Array.isArray(content.relatedInfo) ? content.relatedInfo.map(item => ({
+          title: item.title || "",
+          description: item.description || "",
+          icon: item.icon || "info",
+          link: item.link || "#"
+        })) : [];
+      }
+      if (content?.tables) {
+        // Ensure tables have the correct structure
+        displayData.tables = Array.isArray(content.tables) ? content.tables.map(table => ({
+          title: table.title || "",
+          description: table.description || "",
+          columns: Array.isArray(table.columns) ? table.columns : [],
+          rows: Array.isArray(table.rows) ? table.rows : []
+        })) : [];
+      }
+      if (content?.flowCharts) {
+        // Ensure flowCharts have the correct structure
+        displayData.flowCharts = Array.isArray(content.flowCharts) ? content.flowCharts.map(chart => ({
+          title: chart.title || "",
+          description: chart.description || "",
+          events: Array.isArray(chart.events) ? chart.events.map(event => ({
+            date: event.date || "",
+            title: event.title || "",
+            description: event.description || "",
+            impact: event.impact || ""
+          })) : []
+        })) : [];
+      }
+      if (content?.images) {
+        // Ensure images have the correct structure
+        displayData.images = Array.isArray(content.images) ? content.images.map(image => ({
+          url: image.url || "",
+          alt: image.alt || "",
+          caption: image.caption || ""
+        })) : [];
+      }
+      if (content?.webSearchResults) {
+        // Ensure webSearchResults have the correct structure
+        displayData.webSearchResults = Array.isArray(content.webSearchResults) ? content.webSearchResults.map(result => ({
+          title: result.title || "",
+          url: result.url || "",
+          description: result.description || ""
+        })) : [];
+      }
     } else {
       generatedContent[spec.id] = {
         spec,
         content: { error: String((s as PromiseRejectedResult).reason) },
       };
+      
+      // Store error in component data map
+      componentDataMap.set(spec.id, {
+        kind: spec.kind,
+        error: String((s as PromiseRejectedResult).reason),
+        timestamp: new Date().toISOString()
+      });
     }
   });
 
-  // Enforce that at least 2 components have distinct content
-  // We'll check serialized content strings for uniqueness
+  // Ensure at least two components have distinct content (simple check)
   const contentSigs = Object.values(generatedContent).map((g) => safeStringify(g.content).slice(0, 2000));
   const uniqueSigs = new Set(contentSigs);
   if (uniqueSigs.size < Math.min(2, contentSigs.length)) {
-    // Force re-generation for the second component with a more prescriptive prompt
     const keys = Object.keys(generatedContent);
     if (keys.length >= 2) {
       const secondKey = keys[1];
       const spec = generatedContent[secondKey].spec;
-      // regenerate with a stricter prompt
       const regen = await generateComponentContent(spec, input);
       generatedContent[secondKey] = { spec: regen.spec, content: regen.content };
+      
+      // Store regenerated content in component data map
+      componentDataMap.set(spec.id, {
+        kind: spec.kind,
+        content: regen.content,
+        regenerated: true,
+        timestamp: new Date().toISOString()
+      });
+      
+      // re-populate displayData if relevant with proper structure
+      const content = regen.content;
+      if (spec.kind === "card" && content) {
+        displayData.summary = {
+          summaryText: content.summaryText || "",
+          importantPoints: Array.isArray(content.importantPoints) ? content.importantPoints : [],
+          mainRisksRightsConsequences: content.mainRisksRightsConsequences || "",
+          whatYouShouldDoNow: Array.isArray(content.whatYouShouldDoNow) ? content.whatYouShouldDoNow : [],
+          whatHappensIfYouIgnoreThis: content.whatHappensIfYouIgnoreThis || ""
+        };
+      }
+      if (content?.clauses) displayData.clauses = content.clauses;
+      if (content?.relatedInfo) displayData.relatedInfo = content.relatedInfo;
+      if (content?.tables) displayData.tables = content.tables;
+      if (content?.flowCharts) displayData.flowCharts = content.flowCharts;
+      if (content?.images) displayData.images = content.images;
+      if (content?.webSearchResults) displayData.webSearchResults = content.webSearchResults;
     }
   }
+  
+  // Print component data map to terminal
+  console.log("\n==== COMPONENT DATA MAP ====");
+  console.log("Component count:", componentDataMap.size);
+  const componentDataObj = {};
+  componentDataMap.forEach((value, key) => {
+    componentDataObj[key] = value;
+  });
+  console.log("Component data:", JSON.stringify(componentDataObj, null, 2));
+  console.log("========================\n");
+  
+  // Print displayData to terminal
+  console.log("\n==== DISPLAY DATA ====");
+  console.log("Display data:", JSON.stringify(displayData, null, 2));
+  console.log("========================\n");
 
-  // Convert component specs into UIElement entries for adaptive UI
+  // Convert to UIElement entries
   const elementsArray: UIElement[] = finalComponents.map((c) => {
     const type: UIElement["type"] =
       c.kind === "chart" || c.kind === "timeline" || c.kind === "flowchart" || c.kind === "images"
@@ -701,7 +893,11 @@ export async function generateAdaptiveUI(input: UIGeneratorInput): Promise<Adapt
         ? "data"
         : "interactive";
     const layout: UIElement["layout"] =
-      c.kind === "chart" || c.kind === "flowchart" || c.kind === "timeline" ? "split" : c.kind === "grid" ? "grid" : "stack";
+      c.kind === "chart" || c.kind === "flowchart" || c.kind === "timeline"
+        ? "split"
+        : c.kind === "grid"
+        ? "grid"
+        : "stack";
     return {
       type,
       id: c.id,
@@ -720,11 +916,11 @@ export async function generateAdaptiveUI(input: UIGeneratorInput): Promise<Adapt
 
   // Sort by priority
   const sorted = elementsArray.sort((a, b) => {
-    const p = { high: 0, medium: 1, low: 2 } as any;
+    const p: any = { high: 0, medium: 1, low: 2 };
     return p[a.priority] - p[b.priority];
   });
 
-  // Simple generatedCode fallback (small react component that maps content to components)
+  // Simple generatedCode fallback
   const generatedCode = `// Auto-generated UI component (fallback)
 import React from "react";
 export default function GeneratedUI({ dataState = {} }) {
@@ -734,9 +930,7 @@ export default function GeneratedUI({ dataState = {} }) {
         .map(
           (el) => `<section key="${el.id}" style={{ padding: 12, borderRadius: 8 }}>
   <h3>${el.title}</h3>
-  <pre style={{ whiteSpace: "pre-wrap" }}>${escapeForTemplate(
-    safeStringify(generatedContent[el.id]?.content || el.content)
-  )}</pre>
+  <pre style={{ whiteSpace: "pre-wrap" }}>${escapeForTemplate(safeStringify(generatedContent[el.id]?.content || el.content))}</pre>
 </section>`
         )
         .join("\n")}
@@ -756,13 +950,14 @@ export default function GeneratedUI({ dataState = {} }) {
     }, {}),
     generatedContent,
     generatedCode,
+    displayData,
     metadata: {
       generatedAt: new Date().toISOString(),
       category: input.category,
       complexity: sorted.length > 6 ? "high" : sorted.length > 3 ? "medium" : "low",
       hasInteractiveElements: sorted.some((el) => el.type === "interactive"),
       hasVisualElements: sorted.some((el) => el.type === "visual"),
-      decisionModelUsedLLM: !!decisionResult.usedLLM,
+      decisionModelUsedLLM: !!(decisionResult && decisionResult.usedLLM),
       codeGenModelUsedLLM: true,
       debug: {
         decisionRationale: decisionResult.rationale,
@@ -772,7 +967,7 @@ export default function GeneratedUI({ dataState = {} }) {
       },
     },
   };
-  // debug summary log
+
   console.log("🚀 [UI GEN] final adaptive payload:", {
     layout: adaptiveUI.layout,
     totalElements: adaptiveUI.totalElements,
@@ -782,6 +977,7 @@ export default function GeneratedUI({ dataState = {} }) {
 
   return adaptiveUI;
 }
+
 // small helper
 function escapeForTemplate(str: string) {
   return String(str || "").replace(/`/g, "\\`").replace(/\$/g, "\\$");

@@ -36,9 +36,8 @@ export async function extractPdfText(buffer: Buffer): Promise<string> {
 async function extractPdfTextFallback(buffer: Buffer): Promise<string> {
   try {
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf');
-    // Set worker path to avoid worker issues
-    const pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.entry');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+    // Set worker path to a CDN version to avoid worker issues
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
     
     const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
     let fullText = '';

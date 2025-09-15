@@ -4,7 +4,6 @@ import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { generateAdaptiveUI } from "../utils/enhanced-ui-generator";
 import { supabase } from "../supabase/client";
 import { v4 as uuidv4 } from "uuid";
-import { StreamingTextResponse } from "ai";
 
 // Import workflows
 import { contractWorkflow } from "../workflows/contracts";
@@ -23,7 +22,7 @@ const llm = new ChatGoogleGenerativeAI({
   streaming: false,
 });
 
-// Streaming LLM instance for real-time responses
+// Streaming LLM instance
 const streamingLlm = new ChatGoogleGenerativeAI({
   model: "gemini-1.5-pro",
   apiKey: process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY,
@@ -39,7 +38,6 @@ interface ProcessingState {
   category?: string;
   workflowOutput?: { summary: string; jsonData: any };
   uiStructure?: any;
-  memoryId?: string;
 }
 
 // ---------- MEMORY ----------
@@ -108,7 +106,6 @@ Return strict JSON:
   await saveMemoryToDB(state.userId, state.filename, "classification", { category });
 
   return { ...state, category };
-
 }
 
 // ---------- WORKFLOW ROUTER ----------
@@ -130,49 +127,26 @@ async function runWorkflow(state: ProcessingState): Promise<ProcessingState> {
       [summary, jsonData] = await litigationWorkflow(chunks);
       break;
     case "Corporate Governance Documents":
-      [summary, jsonData] = await corporateWorkflow(
-        chunks,
-        state.category!,
-        state.text
-      );
+      [summary, jsonData] = await corporateWorkflow(chunks, state.category!, state.text);
       break;
     case "Government & Administrative":
-      [summary, jsonData] = await governmentWorkflow(
-        chunks,
-        state.category!,
-        state.text
-      );
+      [summary, jsonData] = await governmentWorkflow(chunks, state.category!, state.text);
       break;
     case "Property & Real Estate":
-      [summary, jsonData] = await propertyWorkflow(
-        chunks,
-        state.category!,
-        state.text
-      );
+      [summary, jsonData] = await propertyWorkflow(chunks, state.category!, state.text);
       break;
     case "Personal Legal Documents":
-      [summary, jsonData] = await personalWorkflow(
-        chunks,
-        state.category!,
-        state.text
-      );
+      [summary, jsonData] = await personalWorkflow(chunks, state.category!, state.text);
       break;
     case "Regulatory & Compliance":
-      [summary, jsonData] = await regulatoryWorkflow(
-        chunks,
-        state.category!,
-        state.text
-      );
+      [summary, jsonData] = await regulatoryWorkflow(chunks, state.category!, state.text);
       break;
     default:
       summary = "No specific workflow. Fallback summary only.";
       jsonData = {};
   }
 
-  await saveMemoryToDB(state.userId, state.filename, "workflow", {
-    summary,
-    jsonData,
-  });
+  await saveMemoryToDB(state.userId, state.filename, "workflow", { summary, jsonData });
 
   return { ...state, workflowOutput: { summary, jsonData } };
 }
@@ -196,7 +170,7 @@ export async function runEnhancedLanggraphWorkflow(
     state.workflowOutput = { summary: "No summary", jsonData: {} };
   }
 
-  const ui = await generateAdaptiveUI(state.workflowOutput); // ✅ always safe now
+  const ui = await generateAdaptiveUI(state.workflowOutput);
   state.uiStructure = ui;
 
   await saveMemoryToDB(state.userId, state.filename, "ui-generation", ui);
@@ -210,11 +184,17 @@ export async function streamEnhancedLanggraphWorkflow(
   filename: string,
   text: string
 ) {
-  // Create a streaming response
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Step 1: Classify (non-streaming)
+        const encoder = new TextEncoder();
+
+        // Step 1: Classification
+        controller.enqueue(encoder.encode(JSON.stringify({
+          status: "classifying",
+          message: "Analyzing document type..."
+        }) + "\n"));
+
         const splitter = new RecursiveCharacterTextSplitter({
           chunkSize: 2000,
           chunkOverlap: 300,
@@ -223,32 +203,26 @@ export async function streamEnhancedLanggraphWorkflow(
         const sampleText = chunks.slice(0, 3).join("\n");
 
         const classificationPrompt = `
-          You are a senior legal analyst.  
-          Classify the document into ONE category:
+You are a senior legal analyst.
+Classify the document into ONE category:
 
-          1. Contracts & Agreements
-          2. Litigation & Court Documents
-          3. Regulatory & Compliance
-          4. Corporate Governance Documents
-          5. Property & Real Estate
-          6. Government & Administrative
-          7. Personal Legal Documents
+1. Contracts & Agreements
+2. Litigation & Court Documents
+3. Regulatory & Compliance
+4. Corporate Governance Documents
+5. Property & Real Estate
+6. Government & Administrative
+7. Personal Legal Documents
 
-          Excerpt:
-          """${sampleText}"""
+Excerpt:
+"""${sampleText}"""
 
-          Return strict JSON:
-          { "category": "exact category name" }
-        `;
-
-        // Send initial status update
-        controller.enqueue(new TextEncoder().encode(JSON.stringify({ 
-          status: "classifying", 
-          message: "Analyzing document type..."
-        }) + "\n"));
+Return strict JSON:
+{ "category": "exact category name" }
+`;
 
         const classResult = await llm.invoke(classificationPrompt);
-        let category = "Contracts & Agreements"; // fallback
+        let category = "Contracts & Agreements";
         try {
           const raw = (classResult.content as string).trim();
           const cleaned = raw.replace(/```json|```/g, "").trim();
@@ -260,50 +234,46 @@ export async function streamEnhancedLanggraphWorkflow(
 
         await saveMemoryToDB(userId, filename, "classification", { category });
 
-        // Send classification result
-        controller.enqueue(new TextEncoder().encode(JSON.stringify({ 
-          status: "classified", 
-          category: category,
+        controller.enqueue(encoder.encode(JSON.stringify({
+          status: "classified",
+          category,
           message: `Document classified as: ${category}`
         }) + "\n"));
 
-        // Step 2: Run Category-Specific Workflow with streaming
-        controller.enqueue(new TextEncoder().encode(JSON.stringify({ 
-          status: "processing", 
+        // Step 2: Workflow (streaming)
+        controller.enqueue(encoder.encode(JSON.stringify({
+          status: "processing",
           message: "Processing document with specialized workflow..."
         }) + "\n"));
 
-        // This will depend on your workflow implementation
-        // For now, we'll simulate with a basic streaming response
         const workflowPrompt = `
-          You are a legal expert analyzing a ${category} document.
-          Provide a detailed analysis of the following text:
-          """${chunks.slice(0, 5).join("\n")}"""
+You are a legal expert analyzing a ${category} document.
+Provide a detailed analysis of the following text:
+"""${chunks.slice(0, 5).join("\n")}"""
 
-          Return your analysis in JSON format:
-          {
-            "summary": "Concise summary of the document",
-            "keyPoints": ["List of key points"],
-            "recommendations": ["List of recommendations"],
-            "risks": ["List of potential risks or issues"]  
-          }
-        `;
+Return your analysis in JSON format:
+{
+  "summary": "Concise summary of the document",
+  "keyPoints": ["List of key points"],
+  "recommendations": ["List of recommendations"],
+  "risks": ["List of potential risks or issues"]
+}
+`;
 
         const workflowStream = await streamingLlm.stream(workflowPrompt);
-        
+
         let workflowResult = "";
         for await (const chunk of workflowStream) {
           const content = chunk.content as string;
           workflowResult += content;
-          
-          // Send incremental updates
-          controller.enqueue(new TextEncoder().encode(JSON.stringify({ 
-            status: "streaming", 
-            content: content
+
+          controller.enqueue(encoder.encode(JSON.stringify({
+            status: "streaming",
+            content
           }) + "\n"));
         }
 
-        // Process the complete workflow result
+        // Step 2b: Parse final workflow result
         let workflowOutput = { summary: "No summary", jsonData: {} };
         try {
           const cleaned = workflowResult.replace(/```json|```/g, "").trim();
@@ -318,37 +288,36 @@ export async function streamEnhancedLanggraphWorkflow(
         } catch (e) {
           console.warn("⚠️ Workflow output parsing error:", e);
           workflowOutput = {
-            summary: workflowResult.substring(0, 500),
+            summary: workflowResult.slice(0, 500),
             jsonData: { rawOutput: workflowResult }
           };
         }
 
         await saveMemoryToDB(userId, filename, "workflow", workflowOutput);
 
-        // Step 3: Generate UI (non-streaming)
-        controller.enqueue(new TextEncoder().encode(JSON.stringify({ 
-          status: "generating_ui", 
+        // Step 3: UI generation
+        controller.enqueue(encoder.encode(JSON.stringify({
+          status: "generating_ui",
           message: "Generating interactive display..."
         }) + "\n"));
 
         const ui = await generateAdaptiveUI(workflowOutput);
         await saveMemoryToDB(userId, filename, "ui-generation", ui);
 
-        // Send final result
-        controller.enqueue(new TextEncoder().encode(JSON.stringify({ 
-          status: "complete", 
-          result: {
-            category,
-            workflowOutput,
-            uiStructure: ui
-          }
+        // Final result
+        controller.enqueue(encoder.encode(JSON.stringify({
+          status: "complete",
+          result: { category, workflowOutput, uiStructure: ui }
         }) + "\n"));
 
+        // ✅ close only once, after all enqueues
         controller.close();
+
       } catch (error) {
         console.error("Streaming workflow error:", error);
-        controller.enqueue(new TextEncoder().encode(JSON.stringify({ 
-          status: "error", 
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode(JSON.stringify({
+          status: "error",
           message: "An error occurred during processing",
           error: String(error)
         }) + "\n"));
@@ -357,10 +326,7 @@ export async function streamEnhancedLanggraphWorkflow(
     }
   });
 
-  // Use native Response instead of StreamingTextResponse due to compatibility issues
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8'
-    }
+    headers: { "Content-Type": "text/plain; charset=utf-8" }
   });
 }
