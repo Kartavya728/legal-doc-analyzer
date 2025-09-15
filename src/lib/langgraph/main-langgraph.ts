@@ -3,7 +3,6 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { generateAdaptiveUI } from "../utils/enhanced-ui-generator";
 import { supabase } from "../supabase/client";
-import { v4 as uuidv4 } from "uuid";
 
 // Import workflows
 import { contractWorkflow } from "../workflows/contracts";
@@ -38,28 +37,6 @@ interface ProcessingState {
   category?: string;
   workflowOutput?: { summary: string; jsonData: any };
   uiStructure?: any;
-}
-
-// ---------- MEMORY ----------
-async function saveMemoryToDB(
-  userId: string,
-  docId: string,
-  step: string,
-  data: any
-) {
-  try {
-    const { error } = await supabase.from("document_memories").insert({
-      id: uuidv4(),
-      user_id: userId,
-      document_id: docId,
-      step,
-      data,
-      created_at: new Date().toISOString(),
-    });
-    if (error) console.error(`❌ Memory save failed at step ${step}:`, error);
-  } catch (err) {
-    console.error("❌ Memory persistence error:", err);
-  }
 }
 
 // ---------- CATEGORY CLASSIFICATION ----------
@@ -103,8 +80,6 @@ Return strict JSON:
     console.warn("⚠️ Classification fallback:", e);
   }
 
-  await saveMemoryToDB(state.userId, state.filename, "classification", { category });
-
   return { ...state, category };
 }
 
@@ -146,8 +121,6 @@ async function runWorkflow(state: ProcessingState): Promise<ProcessingState> {
       jsonData = {};
   }
 
-  await saveMemoryToDB(state.userId, state.filename, "workflow", { summary, jsonData });
-
   return { ...state, workflowOutput: { summary, jsonData } };
 }
 
@@ -173,7 +146,15 @@ export async function runEnhancedLanggraphWorkflow(
   const ui = await generateAdaptiveUI(state.workflowOutput);
   state.uiStructure = ui;
 
-  await saveMemoryToDB(state.userId, state.filename, "ui-generation", ui);
+  // Save conversation history
+  const finalResult = { category: state.category, workflowOutput: state.workflowOutput, uiStructure: ui };
+  await supabase.from("conversations").insert({
+    user_id: userId,
+    data: finalResult,
+    title: `${state.category} - ${filename}`,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  });
 
   return state;
 }
@@ -231,8 +212,6 @@ Return strict JSON:
         } catch (e) {
           console.warn("⚠️ Classification fallback:", e);
         }
-
-        await saveMemoryToDB(userId, filename, "classification", { category });
 
         controller.enqueue(encoder.encode(JSON.stringify({
           status: "classified",
@@ -293,8 +272,6 @@ Return your analysis in JSON format:
           };
         }
 
-        await saveMemoryToDB(userId, filename, "workflow", workflowOutput);
-
         // Step 3: UI generation
         controller.enqueue(encoder.encode(JSON.stringify({
           status: "generating_ui",
@@ -302,15 +279,25 @@ Return your analysis in JSON format:
         }) + "\n"));
 
         const ui = await generateAdaptiveUI(workflowOutput);
-        await saveMemoryToDB(userId, filename, "ui-generation", ui);
 
-        // Final result
+        // ✅ Final canonical result
+        const finalResult = { category, workflowOutput, uiStructure: ui };
+
+        // Save to conversations table
+        await supabase.from("conversations").insert({
+          user_id: userId,
+          data: finalResult,
+          title: `${category} - ${filename}`,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+        // Send to client
         controller.enqueue(encoder.encode(JSON.stringify({
           status: "complete",
-          result: { category, workflowOutput, uiStructure: ui }
+          result: finalResult
         }) + "\n"));
 
-        // ✅ close only once, after all enqueues
         controller.close();
 
       } catch (error) {

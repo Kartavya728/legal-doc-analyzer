@@ -33,8 +33,9 @@ interface SidebarContextProps {
 
 interface ConversationItem {
   id: string;
-  title: string;
+  title: string; // This will now come directly from the 'title' column
   created_at: string;
+  data: any; // Keep data for onSelectHistory
 }
 
 // ------------------- Sidebar Context -------------------
@@ -268,7 +269,7 @@ export const SidebarDemo = ({
 
       const { data, error } = await supabase
         .from("conversations")
-        .select("id, data, created_at")
+        .select("id, title, data, created_at") // Select 'title' directly
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(12);
@@ -277,8 +278,9 @@ export const SidebarDemo = ({
         setConversations(
           data.map((c: any) => ({
             id: c.id,
-            title: c.data.display_input?.query || "Untitled Conversation",
+            title: c.title || "Untitled Conversation", // Use 'c.title'
             created_at: c.created_at,
+            data: c.data, // Keep the full data for onSelectHistory
           }))
         );
       }
@@ -286,19 +288,9 @@ export const SidebarDemo = ({
     fetchConversations();
   }, [supabase]);
 
-  const handleSelect = async (id: string) => {
+  const handleSelect = async (id: string, conversationData: any) => {
     setSelectedId(id);
-    const { data, error } = await supabase
-      .from("conversations")
-      .select("data")
-      .eq("id", id)
-      .single();
-
-    if (!error && data) {
-      onSelectHistory(data.data);
-    } else {
-      console.error("Failed to load conversation", error);
-    }
+    onSelectHistory(conversationData); // Pass the already fetched data
   };
 
   return (
@@ -326,7 +318,7 @@ export const SidebarDemo = ({
               link={{
                 label: conv.title,
                 icon: <span>💬</span>,
-                onClick: () => handleSelect(conv.id),
+                onClick: () => handleSelect(conv.id, conv.data),
               }}
               className={selectedId === conv.id ? "text-blue-400 font-bold" : ""}
             />
