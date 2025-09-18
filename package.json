@@ -25,6 +25,7 @@
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.55.0",
     "@tabler/icons-react": "^3.34.1",
+    "@xenova/transformers": "^2.17.2",
     "ai": "^5.0.44",
     "axios": "^1.11.0",
     "canvas": "^3.2.0",
