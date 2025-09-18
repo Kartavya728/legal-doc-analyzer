@@ -1,154 +1,107 @@
-// src/lib/utils/pdf-processor.ts
-import { createCanvas, loadImage } from 'canvas';
+import { ImageAnnotatorClient } from '@google-cloud/vision';
+import pdf from 'pdf-parse';
 
-// Fast PDF text extraction using pdfjs-dist
-export async function extractPdfText(buffer: Buffer): Promise<string> {
+/**
+ * Initializes and returns a Google Cloud Vision client.
+ */
+function getVisionClient(): ImageAnnotatorClient {
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+  if (!process.env.GOOGLE_CLIENT_EMAIL || !privateKey) {
+    throw new Error("Google Cloud service account credentials (CLIENT_EMAIL, PRIVATE_KEY) are not configured in .env");
+  }
+
+  return new ImageAnnotatorClient({
+    credentials: {
+      client_email: process.env.GOOGLE_CLIENT_EMAIL,
+      private_key: privateKey,
+    },
+    projectId: process.env.GOOGLE_PROJECT_ID,
+  });
+}
+
+/**
+ * Extracts text from a file buffer using the Google Cloud Vision API (OCR).
+ */
+async function extractTextWithGoogleOcr(buffer: Buffer, mimeType: string): Promise<string> {
   try {
-    // Dynamic import to avoid bundling issues
-    const pdfParse = await import('pdf-parse/lib/pdf-parse');
-    const options = {
-      // Increase max pages to handle larger documents
-      max: 0, // 0 = no limit
-      // Add custom rendering to improve text extraction
-      pagerender: async (pageData: any) => {
-        // Return both standard text and custom rendering
-        const renderText = await pageData.getTextContent();
-        return renderText.items.map((item: any) => item.str).join(' ');
-      }
+    const visionClient = getVisionClient();
+    const content = buffer.toString('base64');
+
+    const request = {
+      requests: [
+        {
+          inputConfig: {
+            content: content,
+            mimeType: mimeType,
+          },
+          features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+        },
+      ],
     };
-    const result = await pdfParse.default(buffer, options);
+
+    console.log(`Sending ${mimeType} to Google OCR...`);
+    const [result] = await visionClient.batchAnnotateFiles(request as any);
+
+    // --- DETAILED ERROR CHECKING & LOGGING ---
+    // Log the entire response from Google to see exactly what's happening.
+    console.log("Full Google OCR API Response:", JSON.stringify(result, null, 2));
+
+    const response = result.responses?.[0];
     
-    // Check if text was successfully extracted
-    if (!result.text || result.text.trim().length < 10) {
-      console.log('Primary extraction yielded insufficient text, trying fallback');
-      return await extractPdfTextFallback(buffer);
+    // Check if the response itself contains an error message from Google.
+    if (response?.error) {
+      console.error("🔴 Google OCR returned an error:", response.error.message);
+      throw new Error(`Google OCR Error: ${response.error.message}`);
     }
     
-    return result.text;
-  } catch (error) {
-    console.error('PDF parsing error:', error);
-    // Fallback: try alternative method
-    return await extractPdfTextFallback(buffer);
-  }
-}
-
-// Fallback PDF extraction using pdfjs-dist directly
-async function extractPdfTextFallback(buffer: Buffer): Promise<string> {
-  try {
-    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf');
-    // Set worker path to a CDN version to avoid worker issues
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+    const detection = response?.fullTextAnnotation;
     
-    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-    let fullText = '';
-    
-    // Process each page with enhanced extraction
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      
-      // Get text content with more options for better extraction
-      const textContent = await page.getTextContent({
-        normalizeWhitespace: true,
-        disableCombineTextItems: false
-      });
-      
-      // Process text with position awareness to maintain document structure
-      const items = textContent.items;
-      let lastY = null;
-      let pageText = '';
-      
-      for (const item of items) {
-        if (lastY !== item.transform[5] && lastY !== null) {
-          pageText += '\n'; // Add newline when y-position changes
-        }
-        pageText += item.str + ' ';
-        lastY = item.transform[5];
-      }
-      
-      fullText += pageText + '\n\n'; // Double newline between pages
-    }
-    
-    // Clean up the extracted text
-    const cleanedText = fullText
-      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-      .replace(/\n\s*\n/g, '\n\n') // Replace multiple newlines with double newline
-      .trim();
-    
-    return cleanedText || 'No text content extracted from PDF';
-  } catch (error) {
-    console.error('Fallback PDF extraction failed:', error);
-    return 'Failed to extract text from PDF';
-  }
-}
-
-// Image OCR using Google Vision API
-export async function extractImageText(buffer: Buffer): Promise<string> {
-  try {
-    if (!process.env.GOOGLE_CLOUD_VISION_API_KEY) {
-      throw new Error('Google Vision API key not configured');
-    }
-
-    const base64Image = buffer.toString('base64');
-    const response = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_CLOUD_VISION_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requests: [{
-            image: { content: base64Image },
-            features: [
-              // Use both TEXT_DETECTION and DOCUMENT_TEXT_DETECTION for better results
-              { type: 'TEXT_DETECTION', maxResults: 1 },
-              { type: 'DOCUMENT_TEXT_DETECTION', maxResults: 1 }
-            ],
-            imageContext: {
-              languageHints: ['en'], // Optimize for English text
-              textDetectionParams: {
-                enableTextDetectionConfidenceScore: true
-              }
-            }
-          }]
-        })
-      }
-    );
-
-    const result = await response.json();
-    
-    // Try to get text from DOCUMENT_TEXT_DETECTION first (better for documents)
-    let extractedText = '';
-    
-    // Check for document text detection result
-    const documentTextAnnotation = result.responses?.[0]?.fullTextAnnotation?.text;
-    if (documentTextAnnotation) {
-      extractedText = documentTextAnnotation;
+    if (detection?.text) {
+        console.log("✅ Google OCR successfully extracted text.");
     } else {
-      // Fall back to regular text detection
-      extractedText = result.responses?.[0]?.textAnnotations?.[0]?.description || '';
+        console.warn("Google OCR ran but returned no text. Check the full API response above.");
     }
-    
-    // Clean up the extracted text
-    const cleanedText = extractedText
-      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-      .replace(/\n\s*\n/g, '\n\n') // Replace multiple newlines with double newline
-      .trim();
-    
-    return cleanedText || 'No text content extracted from image';
-    
-  } catch (error) {
-    console.error('OCR error:', error);
-    return 'Failed to extract text from image';
+
+    return detection?.text || "";
+  } catch(error) {
+    console.error("🔴 FATAL ERROR during Google OCR call:", error);
+    throw error; // Re-throw the error to be caught by the main API route
   }
 }
 
-// Main processor function
-export async function processDocumentText(
-  buffer: Buffer, 
-  type: 'pdf' | 'image'
-): Promise<string> {
-  if (type === 'pdf') {
-    return await extractPdfText(buffer);
-  } else {
-    return await extractImageText(buffer);
+/**
+ * Extracts text from a PDF buffer using the fast pdf-parse library.
+ */
+async function extractTextFromPdf(buffer: Buffer): Promise<string> {
+  try {
+    const data = await pdf(buffer);
+    return data.text;
+  } catch (error) {
+    console.warn("Local pdf-parse failed:", error);
+    return "";
   }
+}
+
+/**
+ * Main processor function.
+ */
+export async function processDocumentText(buffer: Buffer, mimeType: string): Promise<string> {
+  let extractedText = "";
+
+  if (mimeType === "application/pdf") {
+    extractedText = await extractTextFromPdf(buffer);
+    if (!extractedText || extractedText.trim().length < 50) {
+      console.log("Low quality PDF text detected, falling back to Google Cloud OCR...");
+      extractedText = await extractTextWithGoogleOcr(buffer, mimeType);
+    }
+  } else if (mimeType.startsWith("image/")) {
+    extractedText = await extractTextWithGoogleOcr(buffer, mimeType);
+  }
+
+  if (!extractedText) {
+    console.warn("Could not extract any text from the document.");
+  }
+
+  return extractedText;
 }
