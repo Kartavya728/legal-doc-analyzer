@@ -29,6 +29,7 @@ This phase of development was crucial in ensuring that the backend was robust, s
 * Dhanad Gupta
 * Namnan Jain
 * Prabhnoor Singh Mann
+* Kartavya Suryavanshi
 
 ### Pipeline Design & Flow
 
