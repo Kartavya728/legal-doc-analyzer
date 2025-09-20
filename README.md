@@ -10,12 +10,13 @@ An AI-powered legal document analyzer that:
 ---
 
 ## 🚀 Features
-- **Next.js 15** frontend
-- **FastAPI + LangChain + LangGraph** backend
-- **Supabase pgvector** for semantic search & RAG
-- **Google Cloud Vision API** for text extraction
-- **Vercel deployment** for frontend + backend
-
+- **Chatbot Interface** Interactive, user-friendly chatbot for querying and navigating legal documents effortlessly.
+- **Granular Analysis** Deep, category-wise and clause-level insights that go beyond surface text scanning.
+- **Safe Search** Smart, secure search functionality to instantly locate critical clauses or terms within large documents.
+- **Document Comparison** Side-by-side comparison to highlight differences, detect manipulations, and ensure authenticity.
+- **Context Aware Analysis** Provides practical interpretations and summaries tailored to the legal domain context.
+- **Related Case Reference** Auto-suggests past cases, judgments, or precedents relevant to the clauses under review.
+- **Transparent Thinking Process** Explainable AI that shows reasoning and highlights why decisions or categorizations are made.
 ---
 
 ## 🛠️ Tech Stack
