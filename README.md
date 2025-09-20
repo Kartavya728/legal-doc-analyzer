@@ -31,6 +31,29 @@ Deployment      | Vercel
 
 ---
 
+## 👨‍💻 Contributors
+
+# Model Development
+
+* Japneet Singh
+* Dhanad Gupta
+* Namnan Jain
+* Prabhnoor Singh Mann
+* Kartavya Suryavanshi
+
+# Pipeline Design & Flow
+
+* Naman Jain
+* Dhanad Gupta
+
+# Web Development
+
+* Japneet Singh
+* Kartavya Suryavanshi
+  
+---
+
+
 ## 📂 Folder Structure
 See [Project Structure](./) above.
 
