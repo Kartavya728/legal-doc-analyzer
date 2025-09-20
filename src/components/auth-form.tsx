@@ -11,7 +11,7 @@ export default function AuthUI() {
     <div className="h-full min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-black via-gray-900 to-black text-white">
      
       <div className="w-full max-w-md p-8 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl">
-        <h1 className="text-3xl font-bold text-center mb-6 bg-gradient-to-r from-purple-400 to-pink-300 bg-clip-text text-transparent">
+        <h1 className="text-3xl font-bold text-center mb-6 bg-gradient-to-r from-blue-500 to-blue-400 bg-clip-text text-transparent">
           Welcome Back
         </h1>
         <Auth
@@ -20,7 +20,7 @@ export default function AuthUI() {
             theme: ThemeSupa,
             style: {
               button: {
-                background: "linear-gradient(to right, #55A1F7FF, #ec4899)",
+                background: "linear-gradient(to right, #55A1F7FF, #4884ECFF)",
                 color: "white",
                 borderRadius: "0.5rem",
                 padding: "0.75rem",
@@ -38,7 +38,7 @@ export default function AuthUI() {
             },
           }}
           theme="dark"
-          providers={["google", "github"]}
+          providers={[]}
         />
       </div>
     </div>
