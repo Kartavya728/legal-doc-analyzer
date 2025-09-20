@@ -205,7 +205,7 @@ export default function HomePage({ user, document }: HomePageProps) {
                 <motion.div animate={{ opacity: isTransitioning ? 0 : 1 }} transition={{ duration: 0.2 }}>
                   <div className="text-center mb-8">
                     <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-magenta-500">
-                      PSM Ka BDSM Ai
+                      LEGAL MASTER
                     </h1>
                     <p className="text-gray-400 mt-2">Unlock insights from your documents with AI.</p>
                   </div>
