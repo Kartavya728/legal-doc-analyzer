@@ -15,7 +15,7 @@ import { regulatoryWorkflow } from "../workflows/regulatory";
 
 // ---------- LLM CONFIG ----------
 const llm = new ChatGoogleGenerativeAI({
-  model: "gemini-1.5-pro",
+  model: "gemini-2.5-flash",
   apiKey: process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY,
   temperature: 0.15,
   streaming: false,
@@ -23,7 +23,7 @@ const llm = new ChatGoogleGenerativeAI({
 
 // Streaming LLM instance
 const streamingLlm = new ChatGoogleGenerativeAI({
-  model: "gemini-1.5-pro",
+  model: "gemini-2.5-flash",
   apiKey: process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY,
   temperature: 0.15,
   streaming: true,
@@ -238,7 +238,6 @@ Return your analysis in JSON format:
   "risks": ["List of potential risks or issues"]
 }
 `;
-
         const workflowStream = await streamingLlm.stream(workflowPrompt);
 
         let workflowResult = "";

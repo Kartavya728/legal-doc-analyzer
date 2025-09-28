@@ -4,7 +4,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 // ⚖️ Main LLM
 const llm = new ChatGoogleGenerativeAI({
-  model: "gemini-1.5-pro", // better for reasoning than flash
+  model: "gemini-2.5-flash", // better for reasoning than flash
   apiKey: process.env.GOOGLE_GENAI_API_KEY!,
   temperature: 0.7,
   maxOutputTokens: 800,

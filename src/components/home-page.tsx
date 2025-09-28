@@ -156,7 +156,6 @@ export default function HomePage({ user, document }: HomePageProps) {
         console.log("Handling single JSON response...");
         finalResultData = await res.json();
       }
-
       setProcessingStep("Finalizing results...");
       setProcessingProgress(95);
 

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     // --- Setup and File Extraction (same as before) ---
     if (!process.env.GOOGLE_API_KEY) throw new Error('GOOGLE_API_KEY is not set');
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const formData = await request.formData();
     const file1 = formData.get('file1') as File | null;

@@ -22,7 +22,6 @@ interface CompareDisplayProps {
     };
   };
 }
-
 const CompareDisplay: React.FC<CompareDisplayProps> = ({ data }) => {
   const getStatusBg = (significance: string) => {
     switch (significance.toLowerCase()) {
@@ -32,7 +31,6 @@ const CompareDisplay: React.FC<CompareDisplayProps> = ({ data }) => {
       default: return 'bg-slate-500/10';
     }
   };
-
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white p-6">
       <div className="max-w-7xl mx-auto">
@@ -48,7 +46,6 @@ const CompareDisplay: React.FC<CompareDisplayProps> = ({ data }) => {
             </div>
 <div/>
         </div>
-
         {/* Summary Section */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
